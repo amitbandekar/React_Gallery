@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image, ScrollView, Button } from 'react-native';
+import { View, Image, ScrollView, StyleSheet, Dimensions, FlatList } from 'react-native';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { Header } from '@rneui/themed'; 
 
+interface Photo {
+  node: {
+    image: {
+      uri?: string;
+    };
+  };
+}
 async function hasAndroidPermission() {
   const getCheckPermissionPromise = () => {
     if (Platform.Version >= '33') {
@@ -43,53 +51,77 @@ async function hasAndroidPermission() {
 }
 
 const GalleryImageLoader = () => {
-  const [photos, setPhotos] = useState([]);
-
-  const _handleButtonPress = () => {
-    CameraRoll.getPhotos({
-      first: 20,
-      assetType: 'Photos',
-    })
-      .then((r) => {
-        setPhotos(r.edges);
-      })
-      .catch((err) => {
-        // Handle error loading images
-        console.error('Error loading images:', err);
-      });
-  };
+  const [photos, setPhotos] = useState<Photo[]>([]);
 
   useEffect(() => {
     const loadImages = async () => {
       if (Platform.OS === 'android' && !(await hasAndroidPermission())) {
         return;
       }
-      // Add your logic to load images here
-      _handleButtonPress();
+      CameraRoll.getPhotos({
+        first: 20,
+        assetType: 'Photos',
+      })
+        .then((r) => {
+          setPhotos(r.edges);
+        })
+        .catch((err) => {
+          // Handle error loading images
+          console.error('Error loading images:', err);
+        });
     };
 
     loadImages();
   }, []);
 
   return (
-    <View>
-      <Button title="Load Images" onPress={_handleButtonPress} />
-      <ScrollView>
-        {photos.map((p, i) => {
-          return (
-            <Image
-              key={i}
-              style={{
-                width: 300,
-                height: 100,
-              }}
-              source={{ uri: p.node.image.uri }}
-            />
-          );
-        })}
-      </ScrollView>
+    <View style={{flex:1}}>
+      <Header
+        backgroundColor="grey"
+        centerComponent={{
+          text: "Photos",
+          style: { color: "#fff" }
+        }}
+        leftComponent={{ icon: "menu", color: "#fff" }}
+        placement="center"
+      />
+      <View style={{width:'100%',alignItems:'center'}}>
+        
+        <FlatList
+        data={photos}
+        numColumns={2}
+        renderItem={({item,index})=>{
+          return( 
+          <View style={styles.dvimg}>
+            <Image style={styles.img}
+            key={index}
+            source={{ uri: item.node.image.uri }}
+          />
+          </View>
+          )
+        }}/>
+        
+      </View>
     </View>
   );
 };
+
+
+const styles = StyleSheet.create({
+  dvimg: {
+    width: Dimensions.get('window').width / 2 -20,
+    height:200,
+    borderRadius:2,
+    backgroundColor:'#E4D9FF',
+    margin:2,
+    justifyContent:'center',
+    alignItems:'center'
+  },
+  img:{
+    height:'95%',
+    width:'95%'
+  }
+  
+});
 
 export default GalleryImageLoader;
