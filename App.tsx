@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image, ScrollView, StyleSheet, Dimensions, FlatList } from 'react-native';
+import { View, Image, ScrollView, StyleSheet, Dimensions, Text, TouchableOpacity } from 'react-native';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
-import { Header } from '@rneui/themed'; 
+import { Header } from '@rneui/themed';
+import FullImageModal from './Components/FullImageModal'
 
 interface Photo {
   node: {
@@ -11,6 +12,7 @@ interface Photo {
     };
   };
 }
+
 async function hasAndroidPermission() {
   const getCheckPermissionPromise = () => {
     if (Platform.Version >= '33') {
@@ -52,6 +54,8 @@ async function hasAndroidPermission() {
 
 const GalleryImageLoader = () => {
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
 
   useEffect(() => {
     const loadImages = async () => {
@@ -74,8 +78,19 @@ const GalleryImageLoader = () => {
     loadImages();
   }, []);
 
+  const openImage = (uri?: string) => {
+    if (uri) {
+      setSelectedImage(uri);
+    }
+  };
+
+  const closeImage = () => {
+    setSelectedImage(null);
+  };
+
   return (
-    <View style={{flex:1}}>
+
+    <View>
       <Header
         backgroundColor="grey"
         centerComponent={{
@@ -85,22 +100,24 @@ const GalleryImageLoader = () => {
         leftComponent={{ icon: "menu", color: "#fff" }}
         placement="center"
       />
-      <View style={{width:'100%',alignItems:'center'}}>
-        
-        <FlatList
-        data={photos}
-        numColumns={2}
-        renderItem={({item,index})=>{
-          return( 
-          <View style={styles.dvimg}>
-            <Image style={styles.img}
-            key={index}
-            source={{ uri: item.node.image.uri }}
-          />
-          </View>
-          )
-        }}/>
-        
+
+      <View className='grid-cols-2'>
+        <ScrollView>
+          {photos.map((p, i) => {
+            return (
+              <TouchableOpacity onPress={() => openImage(p.node.image.uri)} key={i}>
+                <View style={styles.dvimg}>
+                  <Image style={styles.img}
+                    key={i}
+                    source={{ uri: p.node.image.uri }}
+                  />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <FullImageModal uri={selectedImage} onClose={closeImage} />
+
       </View>
     </View>
   );
@@ -109,19 +126,19 @@ const GalleryImageLoader = () => {
 
 const styles = StyleSheet.create({
   dvimg: {
-    width: Dimensions.get('window').width / 2 -20,
-    height:200,
-    borderRadius:2,
-    backgroundColor:'#E4D9FF',
-    margin:2,
-    justifyContent:'center',
-    alignItems:'center'
+    width: Dimensions.get('window').width / 2 - 20,
+    height: 200,
+    borderRadius: 2,
+    margin: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    aspectRatio: 0.9
   },
-  img:{
-    height:'95%',
-    width:'95%'
+  img: {
+    height: '95%',
+    width: '95%'
   }
-  
+
 });
 
 export default GalleryImageLoader;

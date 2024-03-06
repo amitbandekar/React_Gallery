@@ -1,3 +1,7 @@
 {
-  "extends": "@react-native/typescript-config/tsconfig.json"
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "compilerOptions": {
+    // Add your compiler options here if needed
+  },
+  "forceConsistentCasingInFileNames": false
 }
