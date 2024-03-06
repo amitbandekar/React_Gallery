@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image, ScrollView, StyleSheet, Dimensions, Text, TouchableOpacity } from 'react-native';
+import { View, Image, ScrollView, StyleSheet, Dimensions, FlatList, TouchableOpacity } from 'react-native';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { Header } from '@rneui/themed';
@@ -101,8 +101,8 @@ const GalleryImageLoader = () => {
         placement="center"
       />
 
-      <View className='grid-cols-2'>
-        <ScrollView>
+<View style={{width:'100%',alignItems:'center'}}>
+          {/* <ScrollView style={styles.scrollView}>
           {photos.map((p, i) => {
             return (
               <TouchableOpacity onPress={() => openImage(p.node.image.uri)} key={i}>
@@ -115,10 +115,27 @@ const GalleryImageLoader = () => {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </ScrollView> */}
+        <FlatList
+        data={photos}
+        numColumns={2}
+        renderItem={({item,index})=>{
+          return( 
+            <TouchableOpacity onPress={() => openImage(item.node.image.uri)} key={index}>
+          <View style={styles.dvimg}>
+            <Image style={styles.img}
+            key={index}
+            source={{ uri: item.node.image.uri }}
+          />
+          </View>
+          </TouchableOpacity>
+          )
+        }}/>
         <FullImageModal uri={selectedImage} onClose={closeImage} />
 
       </View>
+
+      
     </View>
   );
 };
@@ -137,7 +154,10 @@ const styles = StyleSheet.create({
   img: {
     height: '95%',
     width: '95%'
-  }
+  } ,scrollView: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
 
 });
 
