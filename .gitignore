@@ -64,3 +64,7 @@ yarn-error.log
 
 # testing
 /coverage
+
+# VScode
+.VScode/.react/
+ Components/FullImageModal.tsx

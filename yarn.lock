@@ -1929,6 +1929,15 @@
     invariant "^2.2.4"
     nullthrows "^1.1.1"
 
+"@react-navigation/bottom-tabs@^6.5.18":
+  version "6.5.18"
+  resolved "https://registry.npmjs.org/@react-navigation/bottom-tabs/-/bottom-tabs-6.5.18.tgz"
+  integrity sha512-81OCZw9Bbuldj7cL5FS0FaBgf6rLbU3fWTzzWSnKKWNLE4OPWfDzTIeuH550LiORnID1YmBmC5Pi1cWwWSmulw==
+  dependencies:
+    "@react-navigation/elements" "^1.3.28"
+    color "^4.2.3"
+    warn-once "^0.1.0"
+
 "@react-navigation/core@^6.4.13":
   version "6.4.13"
   resolved "https://registry.npmjs.org/@react-navigation/core/-/core-6.4.13.tgz"
@@ -1941,10 +1950,10 @@
     react-is "^16.13.0"
     use-latest-callback "^0.1.7"
 
-"@react-navigation/elements@^1.3.26":
-  version "1.3.26"
-  resolved "https://registry.npmjs.org/@react-navigation/elements/-/elements-1.3.26.tgz"
-  integrity sha512-9rSY7MD6etU3M3j/OYUvtg4eBqABlkS39iJwwQheE89pSa9QyvXbJSsz/bUBEjFWwsOYxTVzj27bc7ulrDVWgw==
+"@react-navigation/elements@^1.3.26", "@react-navigation/elements@^1.3.28":
+  version "1.3.28"
+  resolved "https://registry.npmjs.org/@react-navigation/elements/-/elements-1.3.28.tgz"
+  integrity sha512-pLKI8RsCuBAXaeTVjJo/ZeOFdZLiJXsnT5DoSpRUCq+B10b53kAI+F1sHhMShB8ALaNPD6RvB45zL8aCBwpuyA==
 
 "@react-navigation/native@^6.0.0", "@react-navigation/native@^6.1.14":
   version "6.1.14"
@@ -6204,6 +6213,11 @@ react-native-gesture-handler@^2.15.0, "react-native-gesture-handler@>= 1.0.0":
     invariant "^2.2.4"
     lodash "^4.17.21"
     prop-types "^15.7.2"
+
+react-native-image-picker@^7.1.0:
+  version "7.1.0"
+  resolved "https://registry.npmjs.org/react-native-image-picker/-/react-native-image-picker-7.1.0.tgz"
+  integrity sha512-An0hn2mwqjGAA2mbsXdHRTyoMMklGPT9stIjE2zvkegU7CdoFhowqvVHfnELJNZnfAiSQuIaeY//z0r1R0lsgw==
 
 react-native-ratings@^8.1.0:
   version "8.1.0"
