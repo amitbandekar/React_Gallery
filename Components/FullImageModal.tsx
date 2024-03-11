@@ -1,55 +1,103 @@
-import React from 'react';
-import { Modal, View, Image, StyleSheet, Dimensions, TouchableOpacity,Text } from 'react-native';
-import { Header } from '@rneui/themed'; 
-import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import React, { useState } from 'react';
+import { View, Image, StyleSheet, Dimensions, TouchableOpacity, Text } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler'; // Import ScrollView from gesture-handler
+import {ImageDTO  } from './UseGallery';
 
-interface FullImageModalProps {
-  uri: string | null;
+interface ImageViewerProps {
+  images: ImageDTO[];
+  selectedIndex: number | null;
   onClose: () => void;
 }
 
-const FullImageModal: React.FC<FullImageModalProps> = ({ uri, onClose }) => {
+const FullImageModal: React.FC<ImageViewerProps> = ({ images, selectedIndex, onClose }) => {
+  const [currentIndex, setCurrentIndex] = useState(selectedIndex);
+
+  const handleSwipe = (event: { nativeEvent: { contentOffset: { x: number }; layoutMeasurement: { width: number } } }) => {
+    const { nativeEvent } = event;
+    const { contentOffset, layoutMeasurement } = nativeEvent;
+    const index = Math.floor(contentOffset.x / layoutMeasurement.width);
+    setCurrentIndex(index);
+  };
+
+  const handlePrev = () => {
+    setCurrentIndex((prevIndex) => (prevIndex === 0 ? images.length - 1 : prevIndex - 1));
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prevIndex) => (prevIndex === images.length - 1 ? 0 : prevIndex + 1));
+  };
+
   return (
-    <Modal visible={!!uri}  onRequestClose={onClose}>
-      <Header
-        backgroundColor="grey"
-        centerComponent={{
-          text: "Photos",
-          style: { color: "#fff" }
-        }}
-        leftComponent={{ icon: "menu", color: "#fff" }}
-        placement="center"
-      />
-      <View className="bg-slate-50"style={styles.container}>
-        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-          <Text style={styles.closeText}>Close</Text>
-        </TouchableOpacity>
-        {uri && <Image style={styles.fullImage} source={{ uri: uri }} />}
-      </View>
-    </Modal>
+    <View style={styles.container}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleSwipe}
+        style={styles.scrollView}
+      >
+        {images.map((image, index) => (
+          <View key={index} style={styles.imageContainer}>
+            <Image source={{ uri: image.node.uri}} style={styles.image} />
+          </View>
+        ))}
+      </ScrollView>
+      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+        <Text style={styles.closeButtonText}>Close</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.prevButton} onPress={handlePrev}>
+        <Text style={styles.buttonText}>{'<'}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+        <Text style={styles.buttonText}>{'>'}</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: 'black',
+  },
+  scrollView: {
+    flexDirection: 'row',
+  },
+  imageContainer: {
+    width: Dimensions.get('window').width,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  fullImage: {
-    width: Dimensions.get('window').width - 40,
-    height: Dimensions.get('window').height - 40,
+  image: {
+    width: '100%',
+    height: '100%',
     resizeMode: 'contain',
   },
   closeButton: {
     position: 'absolute',
-    top: 20,
+    top: 40,
     right: 20,
-    zIndex: 1,
+    zIndex: 999,
   },
-  closeText: {
-    color: '#fff',
+  closeButtonText: {
+    color: 'white',
     fontSize: 16,
+  },
+  prevButton: {
+    position: 'absolute',
+    top: '50%',
+    left: 20,
+    zIndex: 999,
+  },
+  nextButton: {
+    position: 'absolute',
+    top: '50%',
+    right: 20,
+    zIndex: 999,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 24,
   },
 });
 

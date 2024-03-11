@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, Button, Image, Alert } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import CameraIcon from './Icons';
+
 
 const NoiseRemover: React.FC = () => {
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -34,7 +36,7 @@ const NoiseRemover: React.FC = () => {
     });
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/upload', {
+      const response = await fetch('http://192.168.0.104:5000/upload', {
         method: 'POST',
         body: formData,
         headers: {
@@ -50,10 +52,13 @@ const NoiseRemover: React.FC = () => {
     }
   };
 
+
   return (
     <View>
       <Button title="Open Camera" onPress={handleCameraPress} />
       <Button title="Choose from Library" onPress={handleLibraryPress} />
+
+      <CameraIcon />
       {imageUri && <Image source={{ uri: imageUri }} style={{ width: 200, height: 200 }} />}
     </View>
   );
