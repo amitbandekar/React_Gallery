@@ -83,7 +83,7 @@ const NoiseRemover: React.FC = () => {
        
           <Image
             // source={{ uri: imageUri }}
-            source={require('../icons/1000104543.jpg')}
+            source={require('../icons/bgremover.png')}
             style={{
               width: windowWidth/1.3,
               borderRadius:20 // 70% of the screen width
@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 110,
+    backgroundColor:'red'
 
   }
   ,

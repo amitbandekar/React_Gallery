@@ -83,7 +83,7 @@ export const useGallery = ({
         first: !photos || photos.length < pageSize ? pageSize : photos.length,
         assetType: 'Photos',
         mimeTypes: mimeTypeFilter,
-        // Include fileSize only for android since it's causing performance issues on IOS.
+        ...({ include: ['fileSize', 'filename'] }),
         ...({ include: ['fileSize', 'filename'] }),
       });
       const newPhotos = convertCameraRollPicturesToImageDtoType(edges);

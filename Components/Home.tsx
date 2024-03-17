@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView } from 'react-native';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { Header } from '@rneui/themed';
 import { useGallery, ImageDTO } from './UseGallery';
+import CustomHeader from './CustomHeader';
+
 // import FullImageModal from './Components/FullImageModal';
 // import openImageModal from './Components/FullImageModal';
 
@@ -87,18 +89,9 @@ const GalleryImageLoader: React.FC = () => {
 
 
   return (
-
-<View style={{ backgroundColor: "#303131" }}>
-      {/* <Header
-        backgroundColor="grey"
-        centerComponent={{
-          text: "Photos",
-          style: { color: "#fff" }
-        }}
-        leftComponent={{ icon: "menu", color: "#fff" }}
-        placement="center"
-      /> */}
-
+<SafeAreaView style={styles.headercontainer}>
+    <CustomHeader title="Photos" />
+<View style={{ backgroundColor: "#BDE0FE" }}>
       <View style={{ width: '100%', alignItems: 'center' }}>
 
         <FlatList
@@ -122,13 +115,19 @@ const GalleryImageLoader: React.FC = () => {
 
       </View>
     </View>
+    </SafeAreaView>
   );
 };
 
 
 const styles = StyleSheet.create({
+  headercontainer: {
+    flex: 1,
+    backgroundColor: '#e5e5e5',
+
+  },
   dvimg: {
-    width: Dimensions.get('window').width / 2 - 20,
+    width: Dimensions.get('window').width / 2 - 5,
     height: 200,
     borderRadius: 2,
     margin: 2,
@@ -137,9 +136,10 @@ const styles = StyleSheet.create({
     aspectRatio: 0.9
   },
   img: {
-    height: '95%',
-    width: '95%'
-  }, scrollView: {
+    height: '99%',
+    width: '99%'
+  },
+   scrollView: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },

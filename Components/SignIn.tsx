@@ -9,12 +9,14 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import CustomHeader from './CustomHeader';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const navigation = useNavigation();
   const showAlert = (viewId: string) => Alert.alert('Alert', 'Button pressed ' + viewId);
+  var password1;
 
   const handleLogin = async () => {
     try {
@@ -32,81 +34,84 @@ const Login: React.FC = () => {
       // });
       // const data = await response.json();
       // Handle response accordingly
-      showAlert('login');
+      
     } catch (error) {
       console.error('Login failed:', error);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.inputContainer}>
-        <Image
-          style={styles.inputIcon}
-          source={{ uri: 'https://img.icons8.com/ios-filled/512/circled-envelope.png' }}
-        />
-        <TextInput
-          style={styles.inputs}
-          placeholder="Email"
-          keyboardType="email-address"
-          underlineColorAndroid="transparent"
-          onChangeText={(text) => setEmail(text)}
-        />
+    
+
+      <View style={styles.headercontainer}>
+        <CustomHeader title="Sign In" />
+        <View style={styles.container}>
+        <View style={styles.inputContainer}>
+          <Image
+            style={styles.inputIcon}
+            source={{ uri: 'https://img.icons8.com/ios-filled/512/circled-envelope.png' }}
+          />
+          <TextInput
+            style={styles.inputs}
+            placeholder="Email"
+            keyboardType="email-address"
+            underlineColorAndroid="transparent"
+            onChangeText={(text) => setEmail(text)}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Image
+            style={styles.inputIcon}
+            source={{ uri: 'https://img.icons8.com/ios-glyphs/512/key.png' }}
+          />
+          <TextInput
+            style={styles.inputs}
+            placeholder="Password"
+            secureTextEntry={true}
+            underlineColorAndroid="transparent"
+            onChangeText={(text) => setPassword(text)}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.buttonContainer, styles.loginButton]}
+          onPress={handleLogin}>
+          <Text style={styles.loginText}>Login</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.buttonContainer}
+        // onPress={() =>  navigation.navigate("Signup")}
+        >
+          <Text>Sign up</Text>
+        </TouchableOpacity>
       </View>
-
-      <View style={styles.inputContainer}>
-        <Image
-          style={styles.inputIcon}
-          source={{ uri: 'https://img.icons8.com/ios-glyphs/512/key.png' }}
-        />
-        <TextInput
-          style={styles.inputs}
-          placeholder="Password"
-          secureTextEntry={true}
-          underlineColorAndroid="transparent"
-          onChangeText={(text) => setPassword(text)}
-        />
       </View>
-
-      <TouchableOpacity
-        style={[styles.buttonContainer, styles.loginButton]}
-        onPress={handleLogin}>
-        <Text style={styles.loginText}>Login</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.buttonContainer}
-        onPress={() => navigation.navigate('ForgotPassword')}>
-        <Text>Forgot your password?</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.buttonContainer}
-        onPress={() =>  navigation.navigate('SignIn')}>
-        <Text>Sign up</Text>
-      </TouchableOpacity>
-    </View>
   );
 };
 
 const styles = StyleSheet.create({
+   headercontainer: {
+    flex: 1,
+    backgroundColor: '#e5e5e5',
+
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#8d99ae',
+    backgroundColor: '#BDE0FE',
   },
   inputContainer: {
-    borderBottomColor: '#F5FCFF',
-    backgroundColor: '#',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomColor: '#6fffe9',
+    backgroundColor: '#FFC8DD',
     borderRadius: 30,
     borderBottomWidth: 1,
     width: 250,
     height: 45,
     marginBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    
   },
   inputs: {
     height: 45,
@@ -119,6 +124,10 @@ const styles = StyleSheet.create({
     height: 30,
     marginLeft: 15,
     justifyContent: 'center',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 10,
   },
   buttonContainer: {
     height: 45,
@@ -136,5 +145,6 @@ const styles = StyleSheet.create({
     color: 'white',
   },
 });
+
 
 export default Login;
