@@ -1,5 +1,5 @@
-import { useNavigation } from '@react-navigation/native';
-import React, { useState } from 'react';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,44 +8,88 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Button,
+  Modal,
 } from 'react-native';
+import EncryptedStorage from 'react-native-encrypted-storage';
 import CustomHeader from './CustomHeader';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<Record<string, object>>>();
   const showAlert = (viewId: string) => Alert.alert('Alert', 'Button pressed ' + viewId);
-  var password1;
+  const [modalVisible, setModalVisible] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+  const [loginMessage, setLoginMessage] = useState('');
+
+  useEffect(() => {
+    if (modalVisible) {
+      const timer = setTimeout(() => {
+        setModalVisible(false);
+      }, 1500); // Hide modal after 3 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [modalVisible]);
 
   const handleLogin = async () => {
-    try {
-      // Perform API call here to send login email and password
-      // Example:
-      // const response = await fetch('your_api_endpoint', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({
-      //     email,
-      //     password,
-      //   }),
-      // });
-      // const data = await response.json();
-      // Handle response accordingly
-      
-    } catch (error) {
-      console.error('Login failed:', error);
+    if (!email) {
+      Alert.alert('Please Enter email.');
+      return;
+    }else if (!password) {
+      Alert.alert('Please Enter password.');
+      return;
     }
+     else {
+      try {
+        const response = await fetch('https://amitbandekar.pythonanywhere.com/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            username: email,
+            password: password,
+          }),
+        });
+
+        const data = await response.json();
+        
+        console.log(data)
+        console.log(data.success)
+        if (data.success) {
+          // Display alert for successful login
+          Alert.alert("Login Successful", String(data.message));
+          await EncryptedStorage.setItem(
+            "user_session",
+            JSON.stringify({
+                Id : String(data.Id),
+                Name : String(data.Name),
+                Email : String(data.Email),
+            })
+        );
+        const session = await EncryptedStorage.getItem("user_session");
+        navigation.navigate({ name: 'Profile', params: {} });
+
+        console.log(session);
+        } else {
+          // Display alert for failed login
+          Alert.alert("Login Failed", String(data.message));
+        }
+      } catch (error) {
+        console.log('Login error:', error);
+        Alert.alert('Error', 'Login failed. Please try again.');
+      }
+    }
+
   };
 
   return (
-    
 
-      <View style={styles.headercontainer}>
-        <CustomHeader title="Sign In" />
-        <View style={styles.container}>
+
+    <View style={styles.headercontainer}>
+      <CustomHeader title="Sign In" />
+      <View style={styles.container}>
         <View style={styles.inputContainer}>
           <Image
             style={styles.inputIcon}
@@ -55,6 +99,7 @@ const Login: React.FC = () => {
             style={styles.inputs}
             placeholder="Email"
             keyboardType="email-address"
+            placeholderTextColor="black"
             underlineColorAndroid="transparent"
             onChangeText={(text) => setEmail(text)}
           />
@@ -68,6 +113,7 @@ const Login: React.FC = () => {
           <TextInput
             style={styles.inputs}
             placeholder="Password"
+            placeholderTextColor="black"
             secureTextEntry={true}
             underlineColorAndroid="transparent"
             onChangeText={(text) => setPassword(text)}
@@ -81,17 +127,21 @@ const Login: React.FC = () => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.buttonContainer}
-        // onPress={() =>  navigation.navigate("Signup")}
-        >
+          onPress={() => navigation.navigate({ name: 'Signup', params: {} })}
+          >
           <Text>Sign up</Text>
         </TouchableOpacity>
+        
+
       </View>
-      </View>
+    </View>
+
+
   );
 };
 
 const styles = StyleSheet.create({
-   headercontainer: {
+  headercontainer: {
     flex: 1,
     backgroundColor: '#e5e5e5',
 

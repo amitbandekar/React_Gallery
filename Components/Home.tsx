@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView, Modal } from 'react-native';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { Header } from '@rneui/themed';
 import { useGallery, ImageDTO } from './UseGallery';
 import CustomHeader from './CustomHeader';
-
-// import FullImageModal from './Components/FullImageModal';
+import DelIcon from '../icons/deleteicon.svg';
+import FullImageModal from './FullImageModal';
+import Gallery from 'react-native-image-gallery';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 // import openImageModal from './Components/FullImageModal';
 
 
@@ -55,7 +57,6 @@ const GalleryImageLoader: React.FC = () => {
   const { photos, loadNextPagePictures, isLoading, isLoadingNextPage, isReloading, hasNextPage } = useGallery({
     pageSize: 20, // Adjust the page size as needed
   });
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -71,20 +72,34 @@ const GalleryImageLoader: React.FC = () => {
   }, []);
 
 
-  // if (isLoading || isReloading) {
-  //   return (
-  //     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-  //       <ActivityIndicator size="small" />
-  //     </View>
-  //   );
-  // }
-
+  interface RemoteImage {
+    source: { uri: string };
+  }
+  
+  let remoteImages: RemoteImage[] = [];
+  const [modalVisible, setModalVisible] = useState(false);
+  let [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const openImageModal = (index: number) => {
-    setSelectedIndex(index);
-  };
+       //setSelectedIndex();
+       if (photos && photos.length > 0) {
 
+        console.log(remoteImages);
+        setSelectedImageIndex(index);
+        setModalVisible(true);
+
+       }
+  };
+  
   const closeImageModal = () => {
-    setSelectedIndex(null);
+    setSelectedImageIndex(0);
+    setModalVisible(false);
+
+  };
+  const deleteimage = (id:number) => {
+    if (photos && photos.length > 0) {
+    var uri = photos[id].source.uri
+    CameraRoll.deletePhotos([uri]);
+    }
   };
 
 
@@ -97,22 +112,29 @@ const GalleryImageLoader: React.FC = () => {
         <FlatList
           data={photos}
           numColumns={2}
-          keyExtractor={(item: ImageDTO, index: number) => item.node.id + index}
           onEndReached={loadNextPagePictures}
           onEndReachedThreshold={0.1}
           renderItem={({ item, index }) => {
             return (
-              <View style={styles.dvimg}>
+              <TouchableOpacity onPress={() => openImageModal(index)}>
+                <View style={styles.dvimg}>
                 <Image style={styles.img}
                   key={index}
-                  source={{ uri: item.node.uri }}
+                  source={{ uri: item.source.uri }}
                 />
               </View>
+              </TouchableOpacity>
             )
           }} />
-        {/* <FullImageModal onClose={closeImage} /> */}
-        {/* <FullImageModal images={photos?} selectedIndex={selectedIndex} onClose={closeImageModal} /> */}
+        <Modal visible={modalVisible} onRequestClose={closeImageModal}>
+            <Gallery
+              style={{ flex: 1, backgroundColor: 'black' }}
+              images={photos}
+              initialPage={selectedImageIndex}
+            />
+            <DelIcon height={40} width={40} onPress={() => deleteimage(selectedImageIndex)} color={'black'} />
 
+      </Modal>
       </View>
     </View>
     </SafeAreaView>

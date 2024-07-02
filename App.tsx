@@ -21,7 +21,6 @@ import AI from './icons/generativeAi.svg';
 
 const App = () => {
   const [loading, setLoading] = useState(true);
-  const Tab = createBottomTabNavigator();
   const Stack = createStackNavigator();
 
   // Simulate loading delay
@@ -37,30 +36,47 @@ const App = () => {
             <ActivityIndicator size="large" color="blue" />
           </View>
         ) : (
-          <Tab.Navigator
-          initialRouteName='Bgremover'
-          >
-            <Tab.Screen
-              name="Home"
-              component={GalleryImageLoader}
-              options={{
-                tabBarLabel: '',
-                headerShown: false,
-                tabBarIcon: ({ color, size }) => (
-                  <Home width={20} height={30} color={'black'} />
-                  ),
-              }} />
-            <Tab.Screen
-              name="Magic"
-              component={NoiseRemover}
-              options={{
-                tabBarLabel: '',
-                headerShown: false,
-                tabBarIcon: ({ color, size }) => (
-                  <Fire width={20} height={30} color={'black'} />
-                  ),
-              }} />
-              {/* <Tab.Screen
+          <Stack.Navigator>
+            <Stack.Screen name="HomeScreen" options={{ headerShown: false }} component={TabNavigator} />
+
+            <Stack.Screen name='Signup' options={{ headerShown: false }} component={Signup} />
+            <Stack.Screen name='SignIn' options={{ headerShown: false }} component={Login} />
+          </Stack.Navigator>
+        )}
+
+      </NavigationContainer>
+
+    </View>
+  );
+
+};
+
+export function TabNavigator() {
+  const Tab = createBottomTabNavigator();
+  return (
+
+    <Tab.Navigator>
+      <Tab.Screen
+        name="Home"
+        component={GalleryImageLoader}
+        options={{
+          tabBarLabel: '',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Home width={20} height={30} color={'black'} />
+          ),
+        }} />
+      <Tab.Screen
+        name="Magic"
+        component={NoiseRemover}
+        options={{
+          tabBarLabel: '',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Fire width={20} height={30} color={'black'} />
+          ),
+        }} />
+      {/* <Tab.Screen
               name="Bgremover"
               component={BgRemover}
               options={{
@@ -69,47 +85,39 @@ const App = () => {
                   <Fire width={20} height={30} color={'black'} />
                   ),
               }} /> */}
-            <Tab.Screen
-              name="SignIn"
-              component={Login}
-              options={{ 
-                tabBarLabel: '',
-                headerShown: false ,
-                tabBarIcon: ({ color, size }) => (
-                  <BgRemoverIcon width={20} height={30} color={'black'} />
-                  ),
-                  }} />
-            <Tab.Screen
-              name="SignUp"
-              component={Signup}
-              options={{ headerShown: false ,
-                tabBarLabel: '',
-                tabBarIcon: ({ color, size }) => (
-                  <AI width={20} height={30} color={'black'} />
-                  ),
-                   }} />
-            <Tab.Screen
-              name="Profile"
-              component={ProfileDetail}
-              options={{
-                headerShown: false,
-                tabBarLabel: '',
-                tabBarIcon: ({ color, size }) => (
-                  <Profile width={20} height={30} color={'black'} />
-                  ),
-              }} />
-          </Tab.Navigator>
-
-        )}
-        {/* <Stack.Navigator>
-      <Stack.Screen name='Signup' options={{headerShown:false}} component={Signup}/>
-      <Stack.Screen name='SignIn' options={{headerShown:false}} component={Login}/>
-      <Stack.Screen name='ForgotPassword' options={{headerShown:false}} component={ForgotPassword}/>
-      </Stack.Navigator>*/}
-      </NavigationContainer>
-    </View>
-  );
-};
+      <Tab.Screen
+        name="BgRemover"
+        component={BgRemover}
+        options={{
+          tabBarLabel: '',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <BgRemoverIcon width={20} height={30} color={'black'} />
+          ),
+        }} />
+      <Tab.Screen
+        name="Generative AI"
+        component={AI}
+        options={{
+          headerShown: false,
+          tabBarLabel: '',
+          tabBarIcon: ({ color, size }) => (
+            <AI width={20} height={30} color={'black'} />
+          ),
+        }} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileDetail}
+        options={{
+          headerShown: false,
+          tabBarLabel: '',
+          tabBarIcon: ({ color, size }) => (
+            <Profile width={20} height={30} color={'black'} />
+          ),
+        }} />
+    </Tab.Navigator>
+  )
+}
 
 const styles = StyleSheet.create({
   container: {

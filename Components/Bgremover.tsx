@@ -7,6 +7,7 @@ import Download from '../icons/Download.svg';
 import CustomHeader from './CustomHeader';
 import { blue } from 'react-native-reanimated/lib/typescript/reanimated2/Colors';
 import { TouchableOpacity } from 'react-native-gesture-handler';
+import axios from 'axios';
 
 interface CustomFile {
   uri: string;
@@ -14,23 +15,19 @@ interface CustomFile {
   lastModified: number;
   type: string;
 }
+const windowWidth = Dimensions.get('window').width;
 
 
 const NoiseRemover: React.FC = () => {
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null); // Adjusted type to string | null
 
   const handleCameraPress = () => {
     launchCamera({ mediaType: 'photo' }, (response: any) => {
       if (!response.didCancel && !response.error) {
         console.log(response);
-        const uri = response.assets[0].uri ;
-        const file: CustomFile  = {
-          uri: uri,
-          type: 'image/jpeg',
-          name: response.assets[0].fileName,
-          lastModified: Date.now(), // Assuming you want to set the current timestamp
-        };
-      uploadImage(file);
+        const fileUri: string = response.assets[0].uri; // Explicitly specify the type as string
+        //uploadImage(fileUri);
+        sendImage(fileUri);
       }
     });
   };
@@ -41,38 +38,43 @@ const NoiseRemover: React.FC = () => {
       if (!response.didCancel && !response.error) {
         //console.log(uri);
         const uri = response.assets[0].uri ;
-        const file: CustomFile  = {
-          uri: uri,
-          type: 'image/jpeg',
-          name: response.assets[0].fileName,
-          lastModified: Date.now(), // Assuming you want to set the current timestamp
-        };
-      uploadImage(file);
+        const fileUri: string = response.assets[0].uri; // Explicitly specify the type as string
+        sendImage(fileUri);
       }
     });
   };
 
-  const uploadImage = async (file: CustomFile ) => {
-    const formData = new FormData();
-    formData.append('file', file);
   
-    try {
-      const response = await fetch('http://192.168.0.104:5000/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json();
-      console.log(data);
-      Alert.alert('Success', 'Image uploaded successfully!');
-    } catch (error) {
-      console.error('Error:', error);
-      Alert.alert('Error', 'Failed to upload image');
-    }
+  const sendImage = async (fileUri:string) => {
+    // try {
+    //   const data = new FormData();
+    //   const respo = await fetch(fileUri);
+    //   const imageBuffer = await respo.arrayBuffer();
+    //   data.append('file', imageBuffer);
+    //   const response = await axios.request({
+    //     method: 'POST',
+    //     url: 'https://ai-remove-image-background.p.rapidapi.com/',
+    //     headers: {
+    //       'X-RapidAPI-Key': '975ae4bc26msh15f5a8eb67bbe6fp1814d1jsn233b906f81da',
+    //       'X-RapidAPI-Host': 'ai-remove-image-background.p.rapidapi.com',
+    //       'Content-Type': 'multipart/form-data',
+    //       Accept: 'application/octet-stream',
+    //       responseType: 'arraybuffer', // This ensures the response is treated as binary data
+    //     },
+    //     data: data
+    //   });
+    //   console.log(response);
+    //   // Convert the binary data to base64
+    //   const base64Data = Buffer.from(response.data, 'binary').toString('base64');
+    //   setImageUri('data:image/jpeg;base64,' + Buffer.from(base64Data).toString('base64'));
+    // } catch (error) {
+    //   console.error(error);
+    //   Alert.alert('Error', 'Failed to process image.');
+    // }
+    Alert.alert("Your account has no remaining credits.")
   };
+
   
-  const windowWidth = Dimensions.get('window').width;
-
-
 
   return (
     
@@ -83,7 +85,7 @@ const NoiseRemover: React.FC = () => {
        
           <Image
             // source={{ uri: imageUri }}
-            source={require('../icons/bgremover.png')}
+            source={imageUri ? { uri: imageUri } : require('../icons/bgremover.png')}
             style={{
               width: windowWidth/1.3,
               borderRadius:20 // 70% of the screen width
@@ -103,6 +105,7 @@ const NoiseRemover: React.FC = () => {
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   headercontainer: {
@@ -135,4 +138,5 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 });
+
 export default NoiseRemover;

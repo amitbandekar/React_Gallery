@@ -9,18 +9,12 @@ interface GalleryOptions {
   mimeTypeFilter?: Array<string>;
 }
 export interface ImageDTO {
-  node: {
-  id: string;
-  uri: string;
-  }
+  source: { uri: string };
   // Add other properties as needed
 }
 export const convertCameraRollPicturesToImageDtoType = (edges: any[]): ImageDTO[] => {
   return edges.map((edge: any) => ({
-    node: {
-      id: edge.node.id,
-      uri: edge.node.image.uri,
-    }
+    source: { uri: edge.node.image.uri },
   }));
 };
 
