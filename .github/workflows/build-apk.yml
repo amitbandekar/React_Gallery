@@ -55,7 +55,26 @@ jobs:
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload APKs to GitHub Release
+      - name: Upload APKs to GitHub Release v1.1.0
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: 'v1.1.0'
+          name: 'Gallery App v1.1.0 (Clean Modern Gallery)'
+          body: |
+            ## Gallery App v1.1.0
+            - **Clean Gallery Only**: Removed AI, BgRemover, Magic Denoise, Login & Profile clutter.
+            - **Professional Dark Theme**: Modern deep dark styling inspired by Apple Photos & Google Photos.
+            - **Hidden Private Vault**: Vault is completely hidden from UI; accessible only via secret gestures (hold "Gallery" title for 1.2s or 2-finger pinch).
+            - **In-App Video Playback**: Fixed video playback; launches direct native player via Android Intent without error alerts.
+            - **Fixed Lazy Loading**: Infinite loading loop resolved; smooth 60 FPS scrolling through old and new photos.
+            - **Accurate Photo Selection**: Tapping any thumbnail opens that exact item.
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update GitHub Release v1.0.0
         uses: softprops/action-gh-release@v2
         with:
           tag_name: 'v1.0.0'

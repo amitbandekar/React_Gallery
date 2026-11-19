@@ -64,4 +64,3 @@ jest.mock('react-native-image-picker', () => ({
 }));
 
 jest.mock('react-native-image-gallery', () => 'Gallery');
-jest.mock('react-native-video', () => 'Video');

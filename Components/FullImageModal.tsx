@@ -10,10 +10,9 @@ import {
   SafeAreaView,
   Linking,
   Platform,
-  Alert,
+  Image,
 } from 'react-native';
 import Gallery from 'react-native-image-gallery';
-import Video from 'react-native-video';
 import {ImageDTO} from './UseGallery';
 import {isFavorite, toggleFavorite} from './favoritesService';
 
@@ -65,14 +64,12 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
   const [showInfo, setShowInfo] = useState(false);
   const [isFav, setIsFav] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [videoError, setVideoError] = useState(false);
 
   // Synchronize currentIndex immediately whenever initialIndex changes or modal becomes visible
   useEffect(() => {
     if (visible) {
       setCurrentIndex(initialIndex);
       setRotation(0);
-      setVideoError(false);
     }
   }, [initialIndex, visible]);
 
@@ -128,7 +125,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     setRotation(prev => (prev + 90) % 360);
   };
 
-  const handleOpenSystemPlayer = async () => {
+  const handlePlayVideo = async () => {
     if (!currentImage?.source?.uri) {
       return;
     }
@@ -143,14 +140,11 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
         await Linking.openURL(uri);
       }
     } catch (error) {
-      console.warn('External player error:', error);
+      console.warn('sendIntent error, falling back to openURL:', error);
       try {
         await Linking.openURL(uri);
-      } catch {
-        Alert.alert(
-          'Video Playback',
-          'Could not launch external video player.',
-        );
+      } catch (openErr) {
+        console.warn('Cannot open video directly:', openErr);
       }
     }
   };
@@ -168,7 +162,6 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     if (currentIndex < images.length - 1) {
       setCurrentIndex(prev => prev + 1);
       setRotation(0);
-      setVideoError(false);
     }
   };
 
@@ -176,7 +169,6 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     if (currentIndex > 0) {
       setCurrentIndex(prev => prev - 1);
       setRotation(0);
-      setVideoError(false);
     }
   };
 
@@ -237,14 +229,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
                 hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Text style={styles.actionEmoji}>🔄</Text>
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={handleOpenSystemPlayer}
-                style={styles.iconButton}
-                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
-                <Text style={styles.actionEmoji}>📺</Text>
-              </TouchableOpacity>
-            )}
+            ) : null}
 
             <TouchableOpacity
               onPress={handleShare}
@@ -274,38 +259,28 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
         {/* Media Viewing Area */}
         <View style={styles.mediaContainer}>
           {isVideo ? (
-            <View style={styles.videoPlayerWrapper}>
-              {!videoError ? (
-                <Video
-                  key={`video-${currentImage?.source?.uri || currentIndex}`}
-                  source={{uri: currentImage?.source?.uri || ''}}
-                  style={styles.videoPlayer}
-                  controls={true}
-                  resizeMode="contain"
-                  repeat={true}
-                  onError={e => {
-                    console.warn('Native video error, allowing fallback:', e);
-                    setVideoError(true);
-                  }}
-                />
-              ) : (
-                <View style={styles.videoErrorContainer}>
-                  <Text style={styles.videoErrorEmoji}>🎬</Text>
-                  <Text style={styles.videoErrorTitle}>
-                    Video Preview Ready
-                  </Text>
-                  <Text style={styles.videoErrorSubtitle}>
-                    {currentImage?.filename || 'Video clip'}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.externalPlayerBtn}
-                    onPress={handleOpenSystemPlayer}>
-                    <Text style={styles.externalPlayerBtnText}>
-                      ▶ Play with System Player
-                    </Text>
-                  </TouchableOpacity>
+            <View style={styles.videoCardWrapper}>
+              <Image
+                source={{uri: currentImage?.source?.uri}}
+                style={styles.videoPoster}
+                resizeMode="contain"
+              />
+              <TouchableOpacity
+                style={styles.videoPlayOverlay}
+                activeOpacity={0.85}
+                onPress={handlePlayVideo}>
+                <View style={styles.videoPlayCircle}>
+                  <Text style={styles.videoPlayTriangle}>▶</Text>
                 </View>
-              )}
+                <View style={styles.videoPlayBtn}>
+                  <Text style={styles.videoPlayText}>
+                    Play Video{' '}
+                    {currentImage?.playableDuration
+                      ? `(${formatDuration(currentImage.playableDuration)})`
+                      : ''}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
           ) : (
             <View
@@ -321,7 +296,6 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
                 onPageSelected={(index: number) => {
                   setCurrentIndex(index);
                   setRotation(0);
-                  setVideoError(false);
                 }}
               />
             </View>
@@ -501,51 +475,52 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  videoPlayerWrapper: {
+  videoCardWrapper: {
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000000',
   },
-  videoPlayer: {
+  videoPoster: {
     width: '100%',
     height: '100%',
   },
-  videoErrorContainer: {
+  videoPlayOverlay: {
+    position: 'absolute',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    gap: 16,
   },
-  videoErrorEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
+  videoPlayCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: 'rgba(2, 132, 199, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#38bdf8',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  videoErrorTitle: {
-    color: '#f8fafc',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  videoErrorSubtitle: {
-    color: '#94a3b8',
-    fontSize: 14,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  externalPlayerBtn: {
-    backgroundColor: '#0284c7',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-    shadowColor: '#0284c7',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  externalPlayerBtnText: {
+  videoPlayTriangle: {
     color: '#ffffff',
+    fontSize: 32,
+    marginLeft: 4,
+  },
+  videoPlayBtn: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+  },
+  videoPlayText: {
+    color: '#f8fafc',
     fontSize: 15,
     fontWeight: '700',
   },
