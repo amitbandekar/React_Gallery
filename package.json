@@ -7,7 +7,8 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/patch-image-size.js"
   },
   "dependencies": {
     "@react-native-camera-roll/camera-roll": "^7.4.2",
@@ -60,7 +61,7 @@
   },
   "overrides": {
     "decode-uri-component": "^0.5.1",
-    "image-size": "^2.1.0",
+    "image-size": "2.1.0",
     "fast-xml-parser": "^5.12.1"
   }
 }
