@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: write
-  issues: write
 
 jobs:
   build:
@@ -38,27 +37,12 @@ jobs:
         run: chmod +x android/gradlew
 
       - name: Build Debug and Release APKs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd android
-          echo "Starting assembleDebug..."
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../debug_build.log || DEBUG_FAILED=1
-
-          if [ "$DEBUG_FAILED" = "1" ]; then
-            echo "assembleDebug failed! Logging error to issue..."
-            gh issue create --title "assembleDebug failure log" --body "$(tail -n 120 ../debug_build.log)" || true
-            exit 1
-          fi
-
-          echo "Starting assembleRelease..."
-          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee ../release_build.log || RELEASE_FAILED=1
-
-          if [ "$RELEASE_FAILED" = "1" ]; then
-            echo "assembleRelease failed! Logging error to issue..."
-            gh issue create --title "assembleRelease failure log" --body "$(tail -n 120 ../release_build.log)" || true
-            exit 1
-          fi
+          echo "Building debug APK..."
+          ./gradlew assembleDebug --no-daemon
+          echo "Building release APK..."
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APKs as GitHub Artifacts
         uses: actions/upload-artifact@v4
@@ -68,14 +52,27 @@ jobs:
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Create GitHub Release with APKs
+      - name: Upload APKs to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.0"
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push APKs to apk-release branch
         run: |
-          TAG_NAME="v1.0.0"
-          gh release create "$TAG_NAME" \
-            android/app/build/outputs/apk/release/app-release.apk \
-            android/app/build/outputs/apk/debug/app-debug.apk \
-            --title "Gallery App $TAG_NAME" \
-            --notes "Automated Android APK build for Gallery App. Download and install either app-release.apk or app-debug.apk on your Android device." \
-            --clobber || true
+          mkdir -p /tmp/apks
+          cp android/app/build/outputs/apk/release/app-release.apk /tmp/apks/
+          cp android/app/build/outputs/apk/debug/app-debug.apk /tmp/apks/
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan apk-release
+          git rm -rf .
+          cp /tmp/apks/app-release.apk ./app-release.apk
+          cp /tmp/apks/app-debug.apk ./app-debug.apk
+          git add app-release.apk app-debug.apk
+          git commit -m "Latest Gallery APK binaries"
+          git push -f origin apk-release
