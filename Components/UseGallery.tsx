@@ -3,7 +3,7 @@ import {
   AssetType,
   Album,
 } from '@react-native-camera-roll/camera-roll';
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {AppState} from 'react-native';
 
 interface GalleryOptions {
@@ -62,10 +62,19 @@ export const useGallery = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [isLoadingNextPage, setIsLoadingNextPage] = useState(false);
-  const [hasNextPage, setHasNextPage] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [hasNextPage, setHasNextPage] = useState(true);
   const [photos, setPhotos] = useState<ImageDTO[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
+
+  // Refs for stable pagination state without re-triggering hooks
+  const nextCursorRef = useRef<string | undefined>(undefined);
+  const hasNextPageRef = useRef<boolean>(true);
+  const loadingRef = useRef<boolean>(false);
+  const photosLengthRef = useRef<number>(0);
+
+  useEffect(() => {
+    photosLengthRef.current = photos.length;
+  }, [photos.length]);
 
   const loadAlbums = useCallback(async () => {
     try {
@@ -77,16 +86,26 @@ export const useGallery = ({
   }, []);
 
   const loadNextPagePictures = useCallback(async () => {
-    try {
-      if (nextCursor) {
-        setIsLoadingNextPage(true);
-      } else {
-        setIsLoading(true);
-      }
+    // Guard against concurrent calls or when there are no more pages
+    if (loadingRef.current) {
+      return;
+    }
+    if (!hasNextPageRef.current && nextCursorRef.current) {
+      return;
+    }
 
+    loadingRef.current = true;
+    const isNext = Boolean(nextCursorRef.current);
+    if (isNext) {
+      setIsLoadingNextPage(true);
+    } else {
+      setIsLoading(true);
+    }
+
+    try {
       const params: any = {
         first: pageSize,
-        after: nextCursor,
+        after: nextCursorRef.current,
         assetType,
         include: ['filename', 'fileSize', 'imageSize', 'playableDuration'],
       };
@@ -101,21 +120,32 @@ export const useGallery = ({
 
       const {edges, page_info} = await CameraRoll.getPhotos(params);
       const newPhotos = convertCameraRollPicturesToImageDtoType(edges);
-      setPhotos(prev => (nextCursor ? [...prev, ...newPhotos] : newPhotos));
 
-      setNextCursor(page_info.end_cursor);
+      nextCursorRef.current = page_info.end_cursor;
+      hasNextPageRef.current = page_info.has_next_page;
       setHasNextPage(page_info.has_next_page);
+
+      setPhotos(prev => (isNext ? [...prev, ...newPhotos] : newPhotos));
     } catch (error) {
       console.error('useGallery getPhotos error:', error);
     } finally {
+      loadingRef.current = false;
       setIsLoading(false);
       setIsLoadingNextPage(false);
     }
-  }, [assetType, groupName, mimeTypeFilter, nextCursor, pageSize]);
+  }, [assetType, groupName, mimeTypeFilter, pageSize]);
 
   const refreshGallery = useCallback(async () => {
+    if (loadingRef.current) {
+      return;
+    }
+    loadingRef.current = true;
+    setIsReloading(true);
+    nextCursorRef.current = undefined;
+    hasNextPageRef.current = true;
+    setHasNextPage(true);
+
     try {
-      setIsReloading(true);
       const params: any = {
         first: pageSize,
         assetType,
@@ -132,21 +162,30 @@ export const useGallery = ({
 
       const {edges, page_info} = await CameraRoll.getPhotos(params);
       const newPhotos = convertCameraRollPicturesToImageDtoType(edges);
-      setPhotos(newPhotos);
-      setNextCursor(page_info.end_cursor);
+
+      nextCursorRef.current = page_info.end_cursor;
+      hasNextPageRef.current = page_info.has_next_page;
       setHasNextPage(page_info.has_next_page);
+      setPhotos(newPhotos);
       loadAlbums();
     } catch (error) {
       console.error('useGallery refresh error:', error);
     } finally {
+      loadingRef.current = false;
       setIsReloading(false);
     }
   }, [assetType, groupName, loadAlbums, mimeTypeFilter, pageSize]);
 
   const getUnloadedPictures = useCallback(async () => {
+    if (loadingRef.current) {
+      return;
+    }
+    loadingRef.current = true;
+    setIsReloading(true);
+    const count =
+      photosLengthRef.current > 0 ? photosLengthRef.current : pageSize;
+
     try {
-      setIsReloading(true);
-      const count = photos.length > 0 ? photos.length : pageSize;
       const params: any = {
         first: count,
         assetType,
@@ -163,28 +202,34 @@ export const useGallery = ({
 
       const {edges, page_info} = await CameraRoll.getPhotos(params);
       const newPhotos = convertCameraRollPicturesToImageDtoType(edges);
-      setPhotos(newPhotos);
-      setNextCursor(page_info.end_cursor);
+
+      nextCursorRef.current = page_info.end_cursor;
+      hasNextPageRef.current = page_info.has_next_page;
       setHasNextPage(page_info.has_next_page);
+      setPhotos(newPhotos);
       loadAlbums();
     } catch (error) {
       console.error('useGallery getUnloadedPictures error:', error);
     } finally {
+      loadingRef.current = false;
       setIsReloading(false);
     }
-  }, [
-    assetType,
-    groupName,
-    loadAlbums,
-    mimeTypeFilter,
-    pageSize,
-    photos.length,
-  ]);
+  }, [assetType, groupName, loadAlbums, mimeTypeFilter, pageSize]);
 
+  // Load albums on mount
   useEffect(() => {
     loadAlbums();
   }, [loadAlbums]);
 
+  // Reset pagination and reload whenever filter or album changes
+  useEffect(() => {
+    nextCursorRef.current = undefined;
+    hasNextPageRef.current = true;
+    setHasNextPage(true);
+    loadNextPagePictures();
+  }, [groupName, assetType, loadNextPagePictures]);
+
+  // Reload when app returns from background
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {

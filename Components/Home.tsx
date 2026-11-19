@@ -31,7 +31,6 @@ import {
 import {CameraRoll, AssetType} from '@react-native-camera-roll/camera-roll';
 import {launchCamera} from 'react-native-image-picker';
 import {getFavorites} from './favoritesService';
-import {useNavigation, NavigationProp} from '@react-navigation/native';
 
 async function hasAndroidPermission() {
   if (Platform.OS !== 'android') {
@@ -89,8 +88,6 @@ const formatDuration = (seconds?: number): string => {
 };
 
 const GalleryImageLoader: React.FC = () => {
-  const navigation = useNavigation<NavigationProp<Record<string, any>>>();
-
   // Filter & Layout States
   const [selectedAlbum, setSelectedAlbum] = useState<string>('All');
   const [assetType, setAssetType] = useState<AssetType>('All');
@@ -126,6 +123,7 @@ const GalleryImageLoader: React.FC = () => {
     isLoading,
     isLoadingNextPage,
     isReloading,
+    hasNextPage,
   } = useGallery({
     pageSize: 30,
     groupName:
@@ -158,7 +156,7 @@ const GalleryImageLoader: React.FC = () => {
     initGallery();
   }, [initGallery]);
 
-  // Two-finger pinch-zoom detection to open Private Vault
+  // Two-finger pinch gesture detection to open Private Vault
   const initialPinchDist = useRef<number>(0);
   const panResponder = useMemo(
     () =>
@@ -183,8 +181,8 @@ const GalleryImageLoader: React.FC = () => {
           ) {
             const [t1, t2] = evt.nativeEvent.touches;
             const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
-            // Trigger vault on distinct pinch in or pinch out (>75px change)
-            if (Math.abs(dist - initialPinchDist.current) > 75) {
+            // Trigger vault on distinct pinch gesture (>70px change)
+            if (Math.abs(dist - initialPinchDist.current) > 70) {
               initialPinchDist.current = 0;
               handleTriggerVault();
             }
@@ -243,15 +241,17 @@ const GalleryImageLoader: React.FC = () => {
     if (selectedAlbum === 'Favorites') {
       result = result.filter(p => favoriteUris.includes(p.source.uri));
     }
-    result.sort((a, b) => {
-      const timeA = a.timestamp || 0;
-      const timeB = b.timestamp || 0;
-      return sortDescending ? timeB - timeA : timeA - timeB;
-    });
+    if (!sortDescending) {
+      result = [...result].sort((a, b) => {
+        const timeA = a.timestamp || 0;
+        const timeB = b.timestamp || 0;
+        return timeA - timeB;
+      });
+    }
     return result;
   }, [favoriteUris, hiddenUris, photos, selectedAlbum, sortDescending]);
 
-  const itemWidth = (windowWidth - (columns + 1) * 4) / columns;
+  const itemWidth = (windowWidth - (columns + 1) * 2) / columns;
 
   const handleItemPress = (index: number) => {
     if (isSelectionMode) {
@@ -391,7 +391,7 @@ const GalleryImageLoader: React.FC = () => {
     }
     try {
       await Share.share({
-        message: `Sharing ${selectedUris.length} photos`,
+        message: `Sharing ${selectedUris.length} items from Gallery`,
         url: selectedUris[0],
       });
     } catch (error) {
@@ -412,7 +412,7 @@ const GalleryImageLoader: React.FC = () => {
     if (!photo) {
       return;
     }
-    Alert.alert('Delete Photo', 'Are you sure you want to delete this photo?', [
+    Alert.alert('Delete Item', 'Are you sure you want to delete this item?', [
       {text: 'Cancel', style: 'cancel'},
       {
         text: 'Delete',
@@ -425,18 +425,11 @@ const GalleryImageLoader: React.FC = () => {
             loadFavoritesList();
           } catch (error) {
             console.error('Delete error:', error);
-            Alert.alert('Error', 'Failed to delete photo.');
+            Alert.alert('Error', 'Failed to delete item.');
           }
         },
       },
     ]);
-  };
-
-  const handleNavigateToTool = (
-    tool: 'Magic' | 'BgRemover' | 'Generative AI',
-    imageUri: string,
-  ) => {
-    navigation.navigate(tool, {initialImageUri: imageUri});
   };
 
   const toggleColumns = () => {
@@ -445,7 +438,7 @@ const GalleryImageLoader: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.headercontainer} {...panResponder.panHandlers}>
-      {/* Dynamic Header */}
+      {/* Top Header */}
       {isSelectionMode ? (
         <View style={styles.selectionHeader}>
           <TouchableOpacity
@@ -465,38 +458,42 @@ const GalleryImageLoader: React.FC = () => {
           </TouchableOpacity>
         </View>
       ) : (
-        <View>
-          <CustomHeader title="Photos" />
-          {/* Controls Bar: Sort, Columns, Vault */}
-          <View style={styles.subHeaderBar}>
-            <Text style={styles.itemCountText}>
-              {displayedPhotos.length}{' '}
-              {displayedPhotos.length === 1 ? 'item' : 'items'}
-            </Text>
-            <View style={styles.subHeaderControls}>
+        <CustomHeader
+          title="Gallery"
+          subtitle={`${displayedPhotos.length} ${
+            displayedPhotos.length === 1 ? 'item' : 'items'
+          }`}
+          onSecretVaultGesture={handleTriggerVault}
+          rightComponent={
+            <View style={styles.headerControls}>
               <TouchableOpacity
-                style={styles.controlPill}
-                onPress={() => setSortDescending(!sortDescending)}>
-                <Text style={styles.controlPillText}>
-                  {sortDescending ? '🕒 Newest' : '🕒 Oldest'}
+                style={styles.headerIconBtn}
+                onPress={() => setSortDescending(!sortDescending)}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                <Text style={styles.headerIconText}>
+                  {sortDescending ? '↓ New' : '↑ Old'}
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
-                style={styles.controlPill}
-                onPress={toggleColumns}>
-                <Text style={styles.controlPillText}>{columns} cols</Text>
+                style={styles.headerIconBtn}
+                onPress={toggleColumns}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                <Text style={styles.headerIconText}>{columns} col</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
-                style={[styles.controlPill, styles.vaultPill]}
-                onPress={handleTriggerVault}>
-                <Text style={styles.vaultPillText}>🔒 Vault</Text>
+                style={styles.selectToggleBtn}
+                onPress={() => setIsSelectionMode(true)}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                <Text style={styles.selectToggleText}>Select</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          }
+        />
       )}
 
-      {/* Album & Category Filter Scroll */}
+      {/* Modern Filter Chips Bar */}
       <View style={styles.filtersWrapper}>
         <ScrollView
           horizontal
@@ -505,15 +502,56 @@ const GalleryImageLoader: React.FC = () => {
           <TouchableOpacity
             style={[
               styles.filterChip,
-              selectedAlbum === 'All' && styles.filterChipActive,
+              selectedAlbum === 'All' &&
+                assetType === 'All' &&
+                styles.filterChipActive,
             ]}
-            onPress={() => setSelectedAlbum('All')}>
+            onPress={() => {
+              setSelectedAlbum('All');
+              setAssetType('All');
+            }}>
             <Text
               style={[
                 styles.filterChipText,
-                selectedAlbum === 'All' && styles.filterChipTextActive,
+                selectedAlbum === 'All' &&
+                  assetType === 'All' &&
+                  styles.filterChipTextActive,
               ]}>
-              📁 All Media
+              All Media
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              assetType === 'Photos' && styles.filterChipActive,
+            ]}
+            onPress={() =>
+              setAssetType(assetType === 'Photos' ? 'All' : 'Photos')
+            }>
+            <Text
+              style={[
+                styles.filterChipText,
+                assetType === 'Photos' && styles.filterChipTextActive,
+              ]}>
+              📸 Photos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              assetType === 'Videos' && styles.filterChipActive,
+            ]}
+            onPress={() =>
+              setAssetType(assetType === 'Videos' ? 'All' : 'Videos')
+            }>
+            <Text
+              style={[
+                styles.filterChipText,
+                assetType === 'Videos' && styles.filterChipTextActive,
+              ]}>
+              🎥 Videos
             </Text>
           </TouchableOpacity>
 
@@ -535,42 +573,7 @@ const GalleryImageLoader: React.FC = () => {
             </Text>
           </TouchableOpacity>
 
-          {/* Media Type Quick Filters */}
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              assetType === 'Photos' && styles.filterChipActive,
-            ]}
-            onPress={() =>
-              setAssetType(assetType === 'Photos' ? 'All' : 'Photos')
-            }>
-            <Text
-              style={[
-                styles.filterChipText,
-                assetType === 'Photos' && styles.filterChipTextActive,
-              ]}>
-              📷 Photos
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              assetType === 'Videos' && styles.filterChipActive,
-            ]}
-            onPress={() =>
-              setAssetType(assetType === 'Videos' ? 'All' : 'Videos')
-            }>
-            <Text
-              style={[
-                styles.filterChipText,
-                assetType === 'Videos' && styles.filterChipTextActive,
-              ]}>
-              🎥 Videos
-            </Text>
-          </TouchableOpacity>
-
-          {/* Device Albums */}
+          {/* Dynamic Device Albums */}
           {albums.map(alb => (
             <TouchableOpacity
               key={alb.title}
@@ -584,113 +587,123 @@ const GalleryImageLoader: React.FC = () => {
                   styles.filterChipText,
                   selectedAlbum === alb.title && styles.filterChipTextActive,
                 ]}>
-                {alb.title} ({alb.count})
+                📁 {alb.title} ({alb.count})
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       </View>
 
-      {/* Main Gallery Grid */}
+      {/* Main Gallery Grid with Lazy Loading */}
       <View style={styles.body}>
         {isLoading && displayedPhotos.length === 0 ? (
           <View style={styles.centered}>
-            <ActivityIndicator size="large" color="#272640" />
+            <ActivityIndicator size="large" color="#38bdf8" />
             <Text style={styles.loadingText}>Loading library...</Text>
           </View>
         ) : displayedPhotos.length === 0 ? (
           <View style={styles.centered}>
-            <Text style={styles.emptyIcon}>📷</Text>
-            <Text style={styles.emptyText}>No media found in this album.</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={refreshGallery}>
-              <Text style={styles.retryText}>Refresh</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptyEmoji}>🖼️</Text>
+            <Text style={styles.emptyTitle}>No Media Found</Text>
+            <Text style={styles.emptySubtitle}>
+              {selectedAlbum === 'Favorites'
+                ? 'Heart your favorite photos to see them here.'
+                : 'No photos or videos match this filter.'}
+            </Text>
           </View>
         ) : (
           <FlatList
-            key={columns}
+            key={`grid-${columns}`}
             data={displayedPhotos}
             numColumns={columns}
-            keyExtractor={(item, index) => item.source.uri || String(index)}
-            onEndReached={loadNextPagePictures}
-            onEndReachedThreshold={0.5}
-            contentContainerStyle={styles.listContent}
+            keyExtractor={(item, index) => item.source.uri || `photo-${index}`}
             refreshControl={
               <RefreshControl
                 refreshing={isReloading}
                 onRefresh={refreshGallery}
-                tintColor="#272640"
+                tintColor="#38bdf8"
+                colors={['#38bdf8']}
               />
             }
+            onEndReached={() => {
+              if (hasNextPage && !isLoadingNextPage) {
+                loadNextPagePictures();
+              }
+            }}
+            onEndReachedThreshold={0.4}
+            initialNumToRender={24}
+            maxToRenderPerBatch={18}
+            windowSize={7}
+            removeClippedSubviews={Platform.OS === 'android'}
             renderItem={({item, index}) => {
               const isSelected = selectedUris.includes(item.source.uri);
               const isFav = favoriteUris.includes(item.source.uri);
               const isVideo = Boolean(
-                item.playableDuration && item.playableDuration > 0,
+                (item.playableDuration && item.playableDuration > 0) ||
+                  item.type === 'video' ||
+                  item.source?.uri?.endsWith('.mp4') ||
+                  item.source?.uri?.endsWith('.mov') ||
+                  item.source?.uri?.includes('/video/'),
               );
 
               return (
                 <TouchableOpacity
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                   onPress={() => handleItemPress(index)}
-                  onLongPress={() => handleItemLongPress(index)}>
-                  <View
-                    style={[
-                      styles.dvimg,
-                      {width: itemWidth, height: itemWidth},
-                      isSelected && styles.selectedItemBorder,
-                    ]}>
-                    <Image
-                      style={styles.img}
-                      source={{uri: item.source.uri}}
-                      resizeMode="cover"
-                    />
+                  onLongPress={() => handleItemLongPress(index)}
+                  style={[
+                    styles.gridItem,
+                    {width: itemWidth, height: itemWidth},
+                    isSelected && styles.gridItemSelected,
+                  ]}>
+                  <Image
+                    source={{uri: item.source.uri}}
+                    style={styles.thumbnail}
+                    resizeMode="cover"
+                  />
 
-                    {/* Selection Indicator Checkbox */}
-                    {isSelectionMode ? (
-                      <View
-                        style={[
-                          styles.checkbox,
-                          isSelected && styles.checkboxActive,
-                        ]}>
-                        <Text style={styles.checkboxText}>
-                          {isSelected ? '✓' : ''}
-                        </Text>
-                      </View>
-                    ) : null}
+                  {/* Video Duration Badge */}
+                  {isVideo ? (
+                    <View style={styles.videoBadge}>
+                      <Text style={styles.videoBadgeText}>
+                        ▶ {formatDuration(item.playableDuration)}
+                      </Text>
+                    </View>
+                  ) : null}
 
-                    {/* Favorite Heart Badge */}
-                    {!isSelectionMode && isFav ? (
-                      <View style={styles.favBadge}>
-                        <Text style={styles.favBadgeText}>❤️</Text>
-                      </View>
-                    ) : null}
+                  {/* Favorite Heart Indicator */}
+                  {isFav ? (
+                    <View style={styles.favIndicator}>
+                      <Text style={styles.favIndicatorText}>❤️</Text>
+                    </View>
+                  ) : null}
 
-                    {/* Video Duration Badge */}
-                    {isVideo ? (
-                      <View style={styles.videoBadge}>
-                        <Text style={styles.videoBadgeText}>
-                          ▶ {formatDuration(item.playableDuration)}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
+                  {/* Selection Mode Checkbox Badge */}
+                  {isSelectionMode ? (
+                    <View
+                      style={[
+                        styles.selectionBadge,
+                        isSelected && styles.selectionBadgeActive,
+                      ]}>
+                      {isSelected ? (
+                        <Text style={styles.selectionCheckmark}>✓</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               );
             }}
             ListFooterComponent={
               isLoadingNextPage ? (
                 <View style={styles.footerLoader}>
-                  <ActivityIndicator size="small" color="#272640" />
+                  <ActivityIndicator size="small" color="#38bdf8" />
                 </View>
               ) : null
             }
           />
         )}
 
-        {/* Floating Camera Action Button (FAB) */}
+        {/* Floating Quick Camera Button */}
         {!isSelectionMode ? (
           <TouchableOpacity
             style={styles.fab}
@@ -700,7 +713,7 @@ const GalleryImageLoader: React.FC = () => {
           </TouchableOpacity>
         ) : null}
 
-        {/* Batch Operations Bottom Bar */}
+        {/* Selection Actions Bottom Bar */}
         {isSelectionMode ? (
           <View style={styles.batchBar}>
             <TouchableOpacity
@@ -731,7 +744,7 @@ const GalleryImageLoader: React.FC = () => {
           </View>
         ) : null}
 
-        {/* Full Screen Image Modal */}
+        {/* Full Screen Image & Video Viewer */}
         <FullImageModal
           visible={modalVisible}
           images={displayedPhotos}
@@ -742,10 +755,9 @@ const GalleryImageLoader: React.FC = () => {
           }}
           onDelete={handleDeleteSingle}
           onHide={handleSingleHide}
-          onNavigateToTool={handleNavigateToTool}
         />
 
-        {/* Vault Password Modal */}
+        {/* Secret Vault Password Passcode Modal */}
         <VaultPasswordModal
           visible={vaultPasswordVisible}
           mode={vaultPasswordMode}
@@ -757,7 +769,7 @@ const GalleryImageLoader: React.FC = () => {
           }}
         />
 
-        {/* Private Vault Screen Modal */}
+        {/* Hidden Private Vault View */}
         <PrivateVaultModal
           visible={privateVaultVisible}
           onClose={() => setPrivateVaultVisible(false)}
@@ -774,7 +786,7 @@ const GalleryImageLoader: React.FC = () => {
 const styles = StyleSheet.create({
   headercontainer: {
     flex: 1,
-    backgroundColor: '#e5e5e5',
+    backgroundColor: '#090d16',
   },
   selectionHeader: {
     flexDirection: 'row',
@@ -782,259 +794,244 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#272640',
+    backgroundColor: '#0f172a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
   },
   headerBtn: {
-    padding: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
   cancelText: {
-    color: '#ffffff',
+    color: '#94a3b8',
     fontSize: 15,
     fontWeight: '600',
   },
   selectionTitle: {
-    color: '#ffffff',
-    fontSize: 17,
-    fontWeight: 'bold',
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '700',
   },
   selectAllText: {
     color: '#38bdf8',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  subHeaderBar: {
+  headerControls: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f1f5f9',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    gap: 8,
   },
-  itemCountText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  subHeaderControls: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  controlPill: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-  },
-  controlPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  vaultPill: {
+  headerIconBtn: {
     backgroundColor: '#1e293b',
-    borderColor: '#0f172a',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
-  vaultPillText: {
+  headerIconText: {
+    color: '#cbd5e1',
     fontSize: 12,
     fontWeight: '600',
-    color: '#38bdf8',
+  },
+  selectToggleBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  selectToggleText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   filtersWrapper: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 8,
+    backgroundColor: '#090d16',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#1e293b',
+    paddingVertical: 10,
   },
   filterScroll: {
     paddingHorizontal: 12,
     gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
-    marginRight: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#131b2e',
+    borderWidth: 1,
+    borderColor: '#1e293b',
   },
   filterChipActive: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#0369a1',
+    borderColor: '#38bdf8',
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: 13,
+    color: '#94a3b8',
     fontWeight: '600',
-    color: '#475569',
   },
   filterChipTextActive: {
     color: '#ffffff',
+    fontWeight: '700',
   },
   body: {
     flex: 1,
-    backgroundColor: '#BDE0FE',
-  },
-  listContent: {
-    padding: 2,
-  },
-  dvimg: {
-    margin: 2,
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#a2d2ff',
-    position: 'relative',
-  },
-  selectedItemBorder: {
-    borderWidth: 3,
-    borderColor: '#2563eb',
-  },
-  img: {
-    width: '100%',
-    height: '100%',
-  },
-  checkbox: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#ffffff',
-  },
-  checkboxText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  favBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    borderRadius: 10,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  favBadgeText: {
-    fontSize: 11,
-  },
-  videoBadge: {
-    position: 'absolute',
-    bottom: 6,
-    right: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  videoBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '600',
+    backgroundColor: '#090d16',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#272640',
-    marginBottom: 14,
-    fontWeight: '500',
+    padding: 32,
   },
   loadingText: {
-    marginTop: 10,
+    color: '#94a3b8',
     fontSize: 14,
-    color: '#272640',
+    marginTop: 12,
+    fontWeight: '500',
   },
-  retryButton: {
-    backgroundColor: '#00b5ec',
-    paddingHorizontal: 22,
-    paddingVertical: 10,
-    borderRadius: 20,
+  emptyEmoji: {
+    fontSize: 54,
+    marginBottom: 12,
   },
-  retryText: {
-    color: 'white',
-    fontWeight: '600',
+  emptyTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    color: '#64748b',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  gridItem: {
+    margin: 1,
+    backgroundColor: '#1e293b',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  gridItemSelected: {
+    borderWidth: 3,
+    borderColor: '#38bdf8',
+  },
+  thumbnail: {
+    width: '100%',
+    height: '100%',
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  videoBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  favIndicator: {
+    position: 'absolute',
+    bottom: 5,
+    left: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  favIndicatorText: {
+    fontSize: 10,
+  },
+  selectionBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionBadgeActive: {
+    backgroundColor: '#0284c7',
+    borderColor: '#38bdf8',
+  },
+  selectionCheckmark: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   footerLoader: {
-    paddingVertical: 15,
+    paddingVertical: 20,
     alignItems: 'center',
   },
   fab: {
     position: 'absolute',
     bottom: 24,
     right: 20,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#2563eb',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#0284c7',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 3},
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    zIndex: 100,
+    shadowColor: '#0284c7',
+    shadowOffset: {width: 0, height: 6},
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 15,
   },
   fabIcon: {
     fontSize: 26,
   },
   batchBar: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#1e293b',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    shadowColor: '#000000',
+    shadowOffset: {width: 0, height: 8},
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+    zIndex: 20,
   },
   batchBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#334155',
-    gap: 6,
   },
-  batchHideBtn: {
-    backgroundColor: '#475569',
-  },
+  batchHideBtn: {},
+  batchDeleteBtn: {},
   batchBtnEmoji: {
-    fontSize: 16,
+    fontSize: 20,
+    marginBottom: 2,
   },
   batchBtnText: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#f8fafc',
+    fontSize: 12,
     fontWeight: '600',
   },
-  batchDeleteBtn: {
-    backgroundColor: '#dc2626',
-  },
   batchDeleteText: {
-    color: '#ffffff',
+    color: '#ef4444',
   },
 });
 

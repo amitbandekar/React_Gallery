@@ -10,13 +10,14 @@ const target = path.join(
   'cjs',
   'index.js',
 );
+
 if (fs.existsSync(target)) {
   let code = fs.readFileSync(target, 'utf8');
-  if (!code.includes('/* METRO_PATCH */')) {
-    code += `
+  code = code.split('/* METRO_PATCH */')[0].split('const nodeFs')[0];
+  code += `
 /* METRO_PATCH */
-const nodeFs = require("fs");
-const origImageSize = lookup_1.imageSize;
+var nodeFs = require("fs");
+var origImageSize = lookup_1.imageSize;
 function imageSizeWrapper(input) {
   if (typeof input === "string") {
     return origImageSize(nodeFs.readFileSync(input));
@@ -29,7 +30,6 @@ module.exports.default = imageSizeWrapper;
 module.exports.disableTypes = lookup_1.disableTypes;
 module.exports.types = types_1.types;
 `;
-    fs.writeFileSync(target, code, 'utf8');
-    console.log('Successfully patched image-size for Metro compatibility');
-  }
+  fs.writeFileSync(target, code, 'utf8');
+  console.log('Successfully patched image-size for Metro compatibility');
 }

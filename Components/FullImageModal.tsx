@@ -9,9 +9,11 @@ import {
   ScrollView,
   SafeAreaView,
   Linking,
+  Platform,
   Alert,
 } from 'react-native';
 import Gallery from 'react-native-image-gallery';
+import Video from 'react-native-video';
 import {ImageDTO} from './UseGallery';
 import {isFavorite, toggleFavorite} from './favoritesService';
 
@@ -22,10 +24,6 @@ interface FullImageModalProps {
   onClose: () => void;
   onDelete?: (index: number) => void;
   onHide?: (image: ImageDTO) => void;
-  onNavigateToTool?: (
-    tool: 'Magic' | 'BgRemover' | 'Generative AI',
-    imageUri: string,
-  ) => void;
 }
 
 const formatFileSize = (bytes?: number | null): string => {
@@ -62,25 +60,30 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
   onClose,
   onDelete,
   onHide,
-  onNavigateToTool,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [showInfo, setShowInfo] = useState(false);
   const [isFav, setIsFav] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const [videoError, setVideoError] = useState(false);
+
+  // Synchronize currentIndex immediately whenever initialIndex changes or modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      setCurrentIndex(initialIndex);
+      setRotation(0);
+      setVideoError(false);
+    }
+  }, [initialIndex, visible]);
 
   const currentImage = images[currentIndex];
   const isVideo = Boolean(
     (currentImage?.playableDuration && currentImage.playableDuration > 0) ||
       currentImage?.type === 'video' ||
       currentImage?.source?.uri?.endsWith('.mp4') ||
-      currentImage?.source?.uri?.endsWith('.mov'),
+      currentImage?.source?.uri?.endsWith('.mov') ||
+      currentImage?.source?.uri?.includes('/video/'),
   );
-
-  useEffect(() => {
-    setCurrentIndex(initialIndex);
-    setRotation(0);
-  }, [initialIndex]);
 
   useEffect(() => {
     let active = true;
@@ -100,8 +103,8 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     if (!currentImage?.source?.uri) {
       return;
     }
-    const updated = await toggleFavorite(currentImage.source.uri);
-    setIsFav(updated);
+    const newStatus = await toggleFavorite(currentImage.source.uri);
+    setIsFav(newStatus);
   };
 
   const handleShare = async () => {
@@ -125,23 +128,30 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     setRotation(prev => (prev + 90) % 360);
   };
 
-  const handlePlayVideo = async () => {
+  const handleOpenSystemPlayer = async () => {
     if (!currentImage?.source?.uri) {
       return;
     }
+    const uri = currentImage.source.uri;
     try {
-      const supported = await Linking.canOpenURL(currentImage.source.uri);
-      if (supported) {
-        await Linking.openURL(currentImage.source.uri);
+      if (Platform.OS === 'android') {
+        await Linking.sendIntent('android.intent.action.VIEW', [
+          {key: 'data', value: uri},
+          {key: 'type', value: 'video/*'},
+        ]);
       } else {
-        Alert.alert(
-          'Video Playback',
-          `Cannot open video directly from ${currentImage.source.uri}. Native player required.`,
-        );
+        await Linking.openURL(uri);
       }
     } catch (error) {
-      console.warn('Video open error:', error);
-      Alert.alert('Video Playback', 'Opening video with system player...');
+      console.warn('External player error:', error);
+      try {
+        await Linking.openURL(uri);
+      } catch {
+        Alert.alert(
+          'Video Playback',
+          'Could not launch external video player.',
+        );
+      }
     }
   };
 
@@ -154,15 +164,25 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     }
   };
 
-  const handleToolPress = (tool: 'Magic' | 'BgRemover' | 'Generative AI') => {
-    if (!currentImage?.source?.uri) {
-      return;
-    }
-    onClose();
-    if (onNavigateToTool) {
-      onNavigateToTool(tool, currentImage.source.uri);
+  const handleNext = () => {
+    if (currentIndex < images.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+      setRotation(0);
+      setVideoError(false);
     }
   };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+      setRotation(0);
+      setVideoError(false);
+    }
+  };
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <Modal
@@ -171,124 +191,163 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
-        {/* Top Header Bar */}
+        {/* Sleek Modern Top Bar */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.iconButton}>
-            <Text style={styles.headerBtnText}>✕</Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.iconButton}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <Text style={styles.closeBtnText}>✕</Text>
           </TouchableOpacity>
 
-          <Text style={styles.counterText}>
-            {images.length > 0 ? `${currentIndex + 1} / ${images.length}` : ''}
-          </Text>
+          <View style={styles.counterWrapper}>
+            <Text style={styles.counterText}>
+              {images.length > 0
+                ? `${currentIndex + 1} / ${images.length}`
+                : ''}
+            </Text>
+            {isVideo ? (
+              <View style={styles.videoIndicatorPill}>
+                <Text style={styles.videoIndicatorText}>VIDEO</Text>
+              </View>
+            ) : null}
+          </View>
 
           <View style={styles.headerActions}>
             {onHide ? (
               <TouchableOpacity
                 onPress={handleHideToVault}
-                style={styles.iconButton}>
+                style={styles.iconButton}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Text style={styles.actionEmoji}>🔒</Text>
               </TouchableOpacity>
             ) : null}
 
             <TouchableOpacity
               onPress={handleToggleFavorite}
-              style={styles.iconButton}>
+              style={styles.iconButton}
+              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
               <Text style={styles.actionEmoji}>{isFav ? '❤️' : '🤍'}</Text>
             </TouchableOpacity>
 
             {!isVideo ? (
               <TouchableOpacity
                 onPress={handleRotate}
-                style={styles.iconButton}>
+                style={styles.iconButton}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Text style={styles.actionEmoji}>🔄</Text>
               </TouchableOpacity>
-            ) : null}
+            ) : (
+              <TouchableOpacity
+                onPress={handleOpenSystemPlayer}
+                style={styles.iconButton}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                <Text style={styles.actionEmoji}>📺</Text>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity onPress={handleShare} style={styles.iconButton}>
+            <TouchableOpacity
+              onPress={handleShare}
+              style={styles.iconButton}
+              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
               <Text style={styles.actionEmoji}>📤</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => setShowInfo(true)}
-              style={styles.iconButton}>
+              style={styles.iconButton}
+              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
               <Text style={styles.actionEmoji}>ℹ️</Text>
             </TouchableOpacity>
 
             {onDelete ? (
               <TouchableOpacity
                 onPress={() => onDelete(currentIndex)}
-                style={styles.iconButton}>
+                style={styles.iconButton}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Text style={styles.actionEmoji}>🗑️</Text>
               </TouchableOpacity>
             ) : null}
           </View>
         </View>
 
-        {/* Gallery Area */}
-        <View
-          style={[
-            styles.galleryContainer,
-            {transform: [{rotate: `${rotation}deg`}]},
-          ]}>
-          <Gallery
-            style={styles.gallery}
-            images={images}
-            initialPage={initialIndex}
-            onPageSelected={(index: number) => {
-              setCurrentIndex(index);
-              setRotation(0);
-            }}
-          />
-
-          {/* Floating Video Play Button Overlay */}
+        {/* Media Viewing Area */}
+        <View style={styles.mediaContainer}>
           {isVideo ? (
+            <View style={styles.videoPlayerWrapper}>
+              {!videoError ? (
+                <Video
+                  key={`video-${currentImage?.source?.uri || currentIndex}`}
+                  source={{uri: currentImage?.source?.uri || ''}}
+                  style={styles.videoPlayer}
+                  controls={true}
+                  resizeMode="contain"
+                  repeat={true}
+                  onError={e => {
+                    console.warn('Native video error, allowing fallback:', e);
+                    setVideoError(true);
+                  }}
+                />
+              ) : (
+                <View style={styles.videoErrorContainer}>
+                  <Text style={styles.videoErrorEmoji}>🎬</Text>
+                  <Text style={styles.videoErrorTitle}>
+                    Video Preview Ready
+                  </Text>
+                  <Text style={styles.videoErrorSubtitle}>
+                    {currentImage?.filename || 'Video clip'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.externalPlayerBtn}
+                    onPress={handleOpenSystemPlayer}>
+                    <Text style={styles.externalPlayerBtnText}>
+                      ▶ Play with System Player
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.galleryWrapper,
+                {transform: [{rotate: `${rotation}deg`}]},
+              ]}>
+              <Gallery
+                key={`gallery-${currentImage?.source?.uri || currentIndex}`}
+                style={styles.gallery}
+                images={images}
+                initialPage={currentIndex}
+                onPageSelected={(index: number) => {
+                  setCurrentIndex(index);
+                  setRotation(0);
+                  setVideoError(false);
+                }}
+              />
+            </View>
+          )}
+
+          {/* Quick Left/Right Overlay Arrows for Instant Switching */}
+          {images.length > 1 && currentIndex > 0 ? (
             <TouchableOpacity
-              style={styles.videoPlayOverlay}
-              activeOpacity={0.8}
-              onPress={handlePlayVideo}>
-              <View style={styles.videoPlayBtn}>
-                <Text style={styles.videoPlayTriangle}>▶</Text>
-              </View>
-              <Text style={styles.videoPlayLabel}>
-                Play Video{' '}
-                {currentImage?.playableDuration
-                  ? `(${formatDuration(currentImage.playableDuration)})`
-                  : ''}
-              </Text>
+              style={[styles.navArrow, styles.navArrowLeft]}
+              onPress={handlePrevious}
+              hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}>
+              <Text style={styles.navArrowText}>‹</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {images.length > 1 && currentIndex < images.length - 1 ? (
+            <TouchableOpacity
+              style={[styles.navArrow, styles.navArrowRight]}
+              onPress={handleNext}
+              hitSlop={{top: 20, bottom: 20, left: 20, right: 20}}>
+              <Text style={styles.navArrowText}>›</Text>
             </TouchableOpacity>
           ) : null}
         </View>
 
-        {/* Bottom Quick Tools Toolbar (only for photos) */}
-        {!isVideo && onNavigateToTool ? (
-          <View style={styles.bottomToolbar}>
-            <Text style={styles.toolsTitle}>Quick Enhance Tools:</Text>
-            <View style={styles.toolButtonsRow}>
-              <TouchableOpacity
-                style={styles.toolBtn}
-                onPress={() => handleToolPress('Magic')}>
-                <Text style={styles.toolIcon}>🪄</Text>
-                <Text style={styles.toolLabel}>Denoise</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.toolBtn}
-                onPress={() => handleToolPress('BgRemover')}>
-                <Text style={styles.toolIcon}>✂️</Text>
-                <Text style={styles.toolLabel}>Remove BG</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.toolBtn}
-                onPress={() => handleToolPress('Generative AI')}>
-                <Text style={styles.toolIcon}>✨</Text>
-                <Text style={styles.toolLabel}>AI Stylize</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : null}
-
-        {/* Info Details Sheet Modal */}
+        {/* Info Details Modal */}
         <Modal
           visible={showInfo}
           transparent={true}
@@ -298,7 +357,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
             <View style={styles.infoCard}>
               <View style={styles.infoCardHeader}>
                 <Text style={styles.infoCardTitle}>
-                  {isVideo ? 'Video Details' : 'Photo Details'}
+                  {isVideo ? 'Video Information' : 'Photo Information'}
                 </Text>
                 <TouchableOpacity onPress={() => setShowInfo(false)}>
                   <Text style={styles.infoCardClose}>✕</Text>
@@ -307,21 +366,21 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
 
               <ScrollView style={styles.infoScroll}>
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoField}>Filename:</Text>
+                  <Text style={styles.infoField}>Filename</Text>
                   <Text style={styles.infoVal}>
-                    {currentImage?.filename || 'Unnamed media'}
+                    {currentImage?.filename || 'Media item'}
                   </Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoField}>Date Taken:</Text>
+                  <Text style={styles.infoField}>Date Taken</Text>
                   <Text style={styles.infoVal}>
                     {formatDate(currentImage?.timestamp)}
                   </Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoField}>File Size:</Text>
+                  <Text style={styles.infoField}>File Size</Text>
                   <Text style={styles.infoVal}>
                     {formatFileSize(currentImage?.fileSize)}
                   </Text>
@@ -329,7 +388,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
 
                 {currentImage?.width && currentImage?.height ? (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoField}>Dimensions:</Text>
+                    <Text style={styles.infoField}>Resolution</Text>
                     <Text style={styles.infoVal}>
                       {currentImage.width} × {currentImage.height} px
                     </Text>
@@ -338,7 +397,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
 
                 {currentImage?.playableDuration ? (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoField}>Duration:</Text>
+                    <Text style={styles.infoField}>Duration</Text>
                     <Text style={styles.infoVal}>
                       {formatDuration(currentImage.playableDuration)} (
                       {Math.round(currentImage.playableDuration)}s)
@@ -347,17 +406,17 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
                 ) : null}
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoField}>Type:</Text>
+                  <Text style={styles.infoField}>Format</Text>
                   <Text style={styles.infoVal}>
                     {isVideo ? 'Video (Media)' : currentImage?.type || 'Image'}
                   </Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoField}>Path / URI:</Text>
+                  <Text style={styles.infoField}>Location</Text>
                   <Text
                     style={[styles.infoVal, styles.uriText]}
-                    numberOfLines={3}>
+                    numberOfLines={2}>
                     {currentImage?.source?.uri}
                   </Text>
                 </View>
@@ -379,164 +438,202 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(11, 15, 25, 0.92)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
     zIndex: 10,
   },
-  headerBtnText: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: 'bold',
+  counterWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   counterText: {
-    color: '#ffffff',
-    fontSize: 16,
+    color: '#f8fafc',
+    fontSize: 15,
     fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  videoIndicatorPill: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  videoIndicatorText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   iconButton: {
-    padding: 8,
-    marginHorizontal: 2,
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+  },
+  closeBtnText: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    paddingHorizontal: 4,
   },
   actionEmoji: {
-    fontSize: 18,
+    fontSize: 16,
   },
-  galleryContainer: {
+  mediaContainer: {
     flex: 1,
     backgroundColor: '#000000',
-    position: 'relative',
+    justifyContent: 'center',
+  },
+  galleryWrapper: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   gallery: {
     flex: 1,
     backgroundColor: '#000000',
   },
-  videoPlayOverlay: {
-    position: 'absolute',
-    bottom: 30,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: '#38bdf8',
-    gap: 10,
-  },
-  videoPlayBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#38bdf8',
+  videoPlayerWrapper: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  videoPlayTriangle: {
-    color: '#0f172a',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 2,
+  videoPlayer: {
+    width: '100%',
+    height: '100%',
   },
-  videoPlayLabel: {
+  videoErrorContainer: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  videoErrorEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  videoErrorTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  videoErrorSubtitle: {
+    color: '#94a3b8',
+    fontSize: 14,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  externalPlayerBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    shadowColor: '#0284c7',
+    shadowOffset: {width: 0, height: 4},
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  externalPlayerBtnText: {
     color: '#ffffff',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  bottomToolbar: {
-    backgroundColor: 'rgba(20, 20, 20, 0.95)',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#333333',
-  },
-  toolsTitle: {
-    color: '#aaaaaa',
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 8,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-  },
-  toolButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+  navArrow: {
+    position: 'absolute',
+    top: '48%',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+    zIndex: 5,
   },
-  toolBtn: {
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    backgroundColor: '#1f2937',
-    borderRadius: 20,
-    flexDirection: 'row',
-    gap: 6,
+  navArrowLeft: {
+    left: 12,
   },
-  toolIcon: {
-    fontSize: 16,
+  navArrowRight: {
+    right: 12,
   },
-  toolLabel: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
+  navArrowText: {
+    color: '#f8fafc',
+    fontSize: 28,
+    fontWeight: '300',
+    lineHeight: 32,
   },
   infoModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   infoCard: {
-    backgroundColor: '#1e293b',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: '#0f172a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '60%',
+    maxHeight: '65%',
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
   },
   infoCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
-    paddingBottom: 10,
+    borderBottomColor: '#1e293b',
   },
   infoCardTitle: {
-    color: '#ffffff',
+    color: '#f8fafc',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   infoCardClose: {
     color: '#94a3b8',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     padding: 4,
   },
   infoScroll: {
-    maxHeight: 300,
+    marginBottom: 16,
   },
   infoRow: {
     flexDirection: 'row',
-    marginVertical: 6,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1e293b',
   },
   infoField: {
-    width: 100,
     color: '#94a3b8',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
+    width: '32%',
   },
   infoVal: {
-    flex: 1,
-    color: '#ffffff',
+    color: '#f1f5f9',
     fontSize: 14,
+    fontWeight: '600',
+    width: '65%',
+    textAlign: 'right',
   },
   uriText: {
     fontSize: 11,
-    color: '#60a5fa',
+    color: '#64748b',
   },
 });
 
