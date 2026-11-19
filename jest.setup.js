@@ -17,12 +17,28 @@ jest.mock('react-native/Libraries/Utilities/BackHandler', () => ({
   removeEventListener: jest.fn(),
 }));
 
-jest.mock('react-native-encrypted-storage', () => ({
-  setItem: jest.fn(() => Promise.resolve()),
-  getItem: jest.fn(() => Promise.resolve(null)),
-  removeItem: jest.fn(() => Promise.resolve()),
-  clear: jest.fn(() => Promise.resolve()),
+jest.mock('react-native/Libraries/Share/Share', () => ({
+  share: jest.fn(() => Promise.resolve({action: 'sharedAction'})),
 }));
+
+jest.mock('react-native-encrypted-storage', () => {
+  const store = {};
+  return {
+    setItem: jest.fn((key, value) => {
+      store[key] = value;
+      return Promise.resolve();
+    }),
+    getItem: jest.fn(key => Promise.resolve(store[key] || null)),
+    removeItem: jest.fn(key => {
+      delete store[key];
+      return Promise.resolve();
+    }),
+    clear: jest.fn(() => {
+      Object.keys(store).forEach(key => delete store[key]);
+      return Promise.resolve();
+    }),
+  };
+});
 
 jest.mock('@react-native-camera-roll/camera-roll', () => ({
   CameraRoll: {
@@ -36,13 +52,15 @@ jest.mock('@react-native-camera-roll/camera-roll', () => ({
         },
       }),
     ),
+    getAlbums: jest.fn(() => Promise.resolve([])),
     deletePhotos: jest.fn(() => Promise.resolve([])),
+    save: jest.fn(() => Promise.resolve('mock-uri')),
   },
 }));
 
 jest.mock('react-native-image-picker', () => ({
-  launchCamera: jest.fn(),
-  launchImageLibrary: jest.fn(),
+  launchCamera: jest.fn((opts, cb) => cb({didCancel: true})),
+  launchImageLibrary: jest.fn((opts, cb) => cb({didCancel: true})),
 }));
 
 jest.mock('react-native-image-gallery', () => 'Gallery');

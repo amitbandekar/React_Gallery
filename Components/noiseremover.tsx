@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -17,40 +17,15 @@ import Download from '../icons/Download.svg';
 import CustomHeader from './CustomHeader';
 import {API_BASE_URL} from './config';
 import {CameraRoll} from '@react-native-camera-roll/camera-roll';
+import {useRoute, RouteProp} from '@react-navigation/native';
 
 const windowWidth = Dimensions.get('window').width;
 
 const NoiseRemover: React.FC = () => {
+  const route =
+    useRoute<RouteProp<Record<string, {initialImageUri?: string}>, string>>();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const handleCameraPress = () => {
-    launchCamera({mediaType: 'photo'}, response => {
-      if (
-        !response.didCancel &&
-        !response.errorMessage &&
-        response.assets?.[0]?.uri
-      ) {
-        const uri = response.assets[0].uri;
-        setImageUri(uri);
-        processNoiseRemoval(uri);
-      }
-    });
-  };
-
-  const handleLibraryPress = () => {
-    launchImageLibrary({mediaType: 'photo'}, response => {
-      if (
-        !response.didCancel &&
-        !response.errorMessage &&
-        response.assets?.[0]?.uri
-      ) {
-        const uri = response.assets[0].uri;
-        setImageUri(uri);
-        processNoiseRemoval(uri);
-      }
-    });
-  };
 
   const processNoiseRemoval = async (fileUri: string) => {
     setLoading(true);
@@ -90,6 +65,42 @@ const NoiseRemover: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const passedUri = route.params?.initialImageUri;
+    if (passedUri) {
+      setImageUri(passedUri);
+      processNoiseRemoval(passedUri);
+    }
+  }, [route.params?.initialImageUri]);
+
+  const handleCameraPress = () => {
+    launchCamera({mediaType: 'photo'}, response => {
+      if (
+        !response.didCancel &&
+        !response.errorMessage &&
+        response.assets?.[0]?.uri
+      ) {
+        const uri = response.assets[0].uri;
+        setImageUri(uri);
+        processNoiseRemoval(uri);
+      }
+    });
+  };
+
+  const handleLibraryPress = () => {
+    launchImageLibrary({mediaType: 'photo'}, response => {
+      if (
+        !response.didCancel &&
+        !response.errorMessage &&
+        response.assets?.[0]?.uri
+      ) {
+        const uri = response.assets[0].uri;
+        setImageUri(uri);
+        processNoiseRemoval(uri);
+      }
+    });
   };
 
   const handleDownload = async () => {

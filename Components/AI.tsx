@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -18,43 +18,18 @@ import Download from '../icons/Download.svg';
 import CustomHeader from './CustomHeader';
 import {API_BASE_URL} from './config';
 import {CameraRoll} from '@react-native-camera-roll/camera-roll';
+import {useRoute, RouteProp} from '@react-navigation/native';
 
 const windowWidth = Dimensions.get('window').width;
 
 const STYLES = ['vibrant', 'cyberpunk', 'vintage', 'sketch'];
 
 const AI: React.FC = () => {
+  const route =
+    useRoute<RouteProp<Record<string, {initialImageUri?: string}>, string>>();
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<string>('vibrant');
   const [loading, setLoading] = useState(false);
-
-  const handleCameraPress = () => {
-    launchCamera({mediaType: 'photo'}, response => {
-      if (
-        !response.didCancel &&
-        !response.errorMessage &&
-        response.assets?.[0]?.uri
-      ) {
-        const fileUri = response.assets[0].uri;
-        setImageUri(fileUri);
-        processAIGeneration(fileUri, selectedStyle);
-      }
-    });
-  };
-
-  const handleLibraryPress = () => {
-    launchImageLibrary({mediaType: 'photo'}, response => {
-      if (
-        !response.didCancel &&
-        !response.errorMessage &&
-        response.assets?.[0]?.uri
-      ) {
-        const fileUri = response.assets[0].uri;
-        setImageUri(fileUri);
-        processAIGeneration(fileUri, selectedStyle);
-      }
-    });
-  };
 
   const processAIGeneration = async (fileUri: string | null, style: string) => {
     setLoading(true);
@@ -97,6 +72,42 @@ const AI: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const passedUri = route.params?.initialImageUri;
+    if (passedUri) {
+      setImageUri(passedUri);
+      processAIGeneration(passedUri, selectedStyle);
+    }
+  }, [route.params?.initialImageUri, selectedStyle]);
+
+  const handleCameraPress = () => {
+    launchCamera({mediaType: 'photo'}, response => {
+      if (
+        !response.didCancel &&
+        !response.errorMessage &&
+        response.assets?.[0]?.uri
+      ) {
+        const fileUri = response.assets[0].uri;
+        setImageUri(fileUri);
+        processAIGeneration(fileUri, selectedStyle);
+      }
+    });
+  };
+
+  const handleLibraryPress = () => {
+    launchImageLibrary({mediaType: 'photo'}, response => {
+      if (
+        !response.didCancel &&
+        !response.errorMessage &&
+        response.assets?.[0]?.uri
+      ) {
+        const fileUri = response.assets[0].uri;
+        setImageUri(fileUri);
+        processAIGeneration(fileUri, selectedStyle);
+      }
+    });
   };
 
   const handleDownload = async () => {
