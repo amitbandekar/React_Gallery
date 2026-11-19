@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useMemo} from 'react';
+import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import {
   View,
   Image,
@@ -15,10 +15,19 @@ import {
   RefreshControl,
   ScrollView,
   Share,
+  PanResponder,
 } from 'react-native';
-import {useGallery} from './UseGallery';
+import {useGallery, ImageDTO} from './UseGallery';
 import CustomHeader from './CustomHeader';
 import FullImageModal from './FullImageModal';
+import VaultPasswordModal from './VaultPasswordModal';
+import PrivateVaultModal from './PrivateVaultModal';
+import {
+  isPasswordSet,
+  getHiddenUris,
+  hideItem,
+  hideItems,
+} from './vaultService';
 import {CameraRoll, AssetType} from '@react-native-camera-roll/camera-roll';
 import {launchCamera} from 'react-native-image-picker';
 import {getFavorites} from './favoritesService';
@@ -88,14 +97,26 @@ const GalleryImageLoader: React.FC = () => {
   const [columns, setColumns] = useState<number>(3);
   const [sortDescending, setSortDescending] = useState<boolean>(true);
   const [favoriteUris, setFavoriteUris] = useState<string[]>([]);
+  const [hiddenUris, setHiddenUris] = useState<string[]>([]);
 
   // Selection Mode States
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
   const [selectedUris, setSelectedUris] = useState<string[]>([]);
 
-  // Modal Viewer
+  // Modal Viewers
   const [modalVisible, setModalVisible] = useState<boolean>(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+
+  // Private Vault States
+  const [vaultPasswordVisible, setVaultPasswordVisible] = useState(false);
+  const [vaultPasswordMode, setVaultPasswordMode] = useState<'set' | 'unlock'>(
+    'unlock',
+  );
+  const [privateVaultVisible, setPrivateVaultVisible] = useState(false);
+
+  // References for pending hide actions before password was set
+  const pendingHideItem = useRef<ImageDTO | null>(null);
+  const pendingBatchHide = useRef<string[] | null>(null);
 
   const {
     photos,
@@ -119,21 +140,106 @@ const GalleryImageLoader: React.FC = () => {
     setFavoriteUris(favs);
   }, []);
 
+  const loadHiddenList = useCallback(async () => {
+    const hidden = await getHiddenUris();
+    setHiddenUris(hidden);
+  }, []);
+
   const initGallery = useCallback(async () => {
     const permitted = await hasAndroidPermission();
     if (permitted) {
       loadNextPagePictures();
       loadFavoritesList();
+      loadHiddenList();
     }
-  }, [loadFavoritesList, loadNextPagePictures]);
+  }, [loadFavoritesList, loadHiddenList, loadNextPagePictures]);
 
   useEffect(() => {
     initGallery();
   }, [initGallery]);
 
-  // Filter by Favorites if selected
+  // Two-finger pinch-zoom detection to open Private Vault
+  const initialPinchDist = useRef<number>(0);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponderCapture: evt =>
+          evt.nativeEvent.touches.length >= 2,
+        onMoveShouldSetPanResponderCapture: evt =>
+          evt.nativeEvent.touches.length >= 2,
+        onPanResponderGrant: evt => {
+          if (evt.nativeEvent.touches.length >= 2) {
+            const [t1, t2] = evt.nativeEvent.touches;
+            initialPinchDist.current = Math.hypot(
+              t1.pageX - t2.pageX,
+              t1.pageY - t2.pageY,
+            );
+          }
+        },
+        onPanResponderMove: evt => {
+          if (
+            evt.nativeEvent.touches.length >= 2 &&
+            initialPinchDist.current > 0
+          ) {
+            const [t1, t2] = evt.nativeEvent.touches;
+            const dist = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
+            // Trigger vault on distinct pinch in or pinch out (>75px change)
+            if (Math.abs(dist - initialPinchDist.current) > 75) {
+              initialPinchDist.current = 0;
+              handleTriggerVault();
+            }
+          }
+        },
+        onPanResponderRelease: () => {
+          initialPinchDist.current = 0;
+        },
+      }),
+    [],
+  );
+
+  const handleTriggerVault = async () => {
+    const hasPass = await isPasswordSet();
+    if (!hasPass) {
+      setVaultPasswordMode('set');
+    } else {
+      setVaultPasswordMode('unlock');
+    }
+    setVaultPasswordVisible(true);
+  };
+
+  const handleVaultPasswordSuccess = async () => {
+    setVaultPasswordVisible(false);
+
+    // If there was a pending single hide
+    if (pendingHideItem.current) {
+      await hideItem(pendingHideItem.current);
+      pendingHideItem.current = null;
+      setModalVisible(false);
+      loadHiddenList();
+      Alert.alert('Hidden', 'Item moved to Private Vault.');
+      return;
+    }
+
+    // If there was a pending batch hide
+    if (pendingBatchHide.current) {
+      const itemsToHide = displayedPhotos.filter(p =>
+        pendingBatchHide.current?.includes(p.source.uri),
+      );
+      await hideItems(itemsToHide);
+      pendingBatchHide.current = null;
+      exitSelectionMode();
+      loadHiddenList();
+      Alert.alert('Hidden', 'Selected items moved to Private Vault.');
+      return;
+    }
+
+    // Otherwise, open the vault!
+    setPrivateVaultVisible(true);
+  };
+
+  // Filter out hidden items & apply favorites/sorting
   const displayedPhotos = useMemo(() => {
-    let result = [...photos];
+    let result = photos.filter(p => !hiddenUris.includes(p.source.uri));
     if (selectedAlbum === 'Favorites') {
       result = result.filter(p => favoriteUris.includes(p.source.uri));
     }
@@ -143,11 +249,10 @@ const GalleryImageLoader: React.FC = () => {
       return sortDescending ? timeB - timeA : timeA - timeB;
     });
     return result;
-  }, [favoriteUris, photos, selectedAlbum, sortDescending]);
+  }, [favoriteUris, hiddenUris, photos, selectedAlbum, sortDescending]);
 
   const itemWidth = (windowWidth - (columns + 1) * 4) / columns;
 
-  // Single Item Click
   const handleItemPress = (index: number) => {
     if (isSelectionMode) {
       const photo = displayedPhotos[index];
@@ -166,7 +271,6 @@ const GalleryImageLoader: React.FC = () => {
     }
   };
 
-  // Long Press to Enter Selection Mode
   const handleItemLongPress = (index: number) => {
     if (!isSelectionMode) {
       setIsSelectionMode(true);
@@ -218,6 +322,69 @@ const GalleryImageLoader: React.FC = () => {
     );
   };
 
+  const handleBatchHide = async () => {
+    if (selectedUris.length === 0) {
+      return;
+    }
+    const hasPass = await isPasswordSet();
+    if (!hasPass) {
+      pendingBatchHide.current = selectedUris;
+      setVaultPasswordMode('set');
+      setVaultPasswordVisible(true);
+      return;
+    }
+
+    Alert.alert(
+      'Hide Items',
+      `Move ${selectedUris.length} item(s) to the Private Vault? They will be hidden from the gallery.`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Hide',
+          onPress: async () => {
+            const itemsToHide = displayedPhotos.filter(p =>
+              selectedUris.includes(p.source.uri),
+            );
+            await hideItems(itemsToHide);
+            exitSelectionMode();
+            loadHiddenList();
+            Alert.alert(
+              'Hidden',
+              `${selectedUris.length} item(s) moved to Private Vault.`,
+            );
+          },
+        },
+      ],
+    );
+  };
+
+  const handleSingleHide = async (photo: ImageDTO) => {
+    const hasPass = await isPasswordSet();
+    if (!hasPass) {
+      pendingHideItem.current = photo;
+      setVaultPasswordMode('set');
+      setVaultPasswordVisible(true);
+      return;
+    }
+
+    Alert.alert(
+      'Hide Item',
+      'Move this item to Private Vault? It will be hidden from the main gallery.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Hide',
+          onPress: async () => {
+            await hideItem(photo);
+            setModalVisible(false);
+            loadHiddenList();
+            Alert.alert('Hidden', 'Item moved to Private Vault.');
+          },
+        },
+      ],
+    );
+  };
+
   const handleBatchShare = async () => {
     if (selectedUris.length === 0) {
       return;
@@ -232,7 +399,6 @@ const GalleryImageLoader: React.FC = () => {
     }
   };
 
-  // Quick Camera Launch (FAB)
   const handleQuickCamera = () => {
     launchCamera({mediaType: 'photo', saveToPhotos: true}, response => {
       if (!response.didCancel && !response.errorMessage) {
@@ -278,7 +444,7 @@ const GalleryImageLoader: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.headercontainer}>
+    <SafeAreaView style={styles.headercontainer} {...panResponder.panHandlers}>
       {/* Dynamic Header */}
       {isSelectionMode ? (
         <View style={styles.selectionHeader}>
@@ -301,7 +467,7 @@ const GalleryImageLoader: React.FC = () => {
       ) : (
         <View>
           <CustomHeader title="Photos" />
-          {/* Controls Bar: Sort & Columns */}
+          {/* Controls Bar: Sort, Columns, Vault */}
           <View style={styles.subHeaderBar}>
             <Text style={styles.itemCountText}>
               {displayedPhotos.length}{' '}
@@ -319,6 +485,11 @@ const GalleryImageLoader: React.FC = () => {
                 style={styles.controlPill}
                 onPress={toggleColumns}>
                 <Text style={styles.controlPillText}>{columns} cols</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.controlPill, styles.vaultPill]}
+                onPress={handleTriggerVault}>
+                <Text style={styles.vaultPillText}>🔒 Vault</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -541,6 +712,14 @@ const GalleryImageLoader: React.FC = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.batchBtn, styles.batchHideBtn]}
+              onPress={handleBatchHide}
+              disabled={selectedUris.length === 0}>
+              <Text style={styles.batchBtnEmoji}>🔒</Text>
+              <Text style={styles.batchBtnText}>Hide</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.batchBtn, styles.batchDeleteBtn]}
               onPress={handleBatchDelete}
               disabled={selectedUris.length === 0}>
@@ -562,7 +741,30 @@ const GalleryImageLoader: React.FC = () => {
             loadFavoritesList();
           }}
           onDelete={handleDeleteSingle}
+          onHide={handleSingleHide}
           onNavigateToTool={handleNavigateToTool}
+        />
+
+        {/* Vault Password Modal */}
+        <VaultPasswordModal
+          visible={vaultPasswordVisible}
+          mode={vaultPasswordMode}
+          onSuccess={handleVaultPasswordSuccess}
+          onClose={() => {
+            setVaultPasswordVisible(false);
+            pendingHideItem.current = null;
+            pendingBatchHide.current = null;
+          }}
+        />
+
+        {/* Private Vault Screen Modal */}
+        <PrivateVaultModal
+          visible={privateVaultVisible}
+          onClose={() => setPrivateVaultVisible(false)}
+          onItemsUpdated={() => {
+            loadHiddenList();
+            refreshGallery();
+          }}
         />
       </View>
     </SafeAreaView>
@@ -617,7 +819,7 @@ const styles = StyleSheet.create({
   },
   subHeaderControls: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   controlPill: {
     backgroundColor: '#ffffff',
@@ -631,6 +833,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#334155',
+  },
+  vaultPill: {
+    backgroundColor: '#1e293b',
+    borderColor: '#0f172a',
+  },
+  vaultPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#38bdf8',
   },
   filtersWrapper: {
     backgroundColor: '#ffffff',
@@ -807,6 +1018,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#334155',
     gap: 6,
+  },
+  batchHideBtn: {
+    backgroundColor: '#475569',
   },
   batchBtnEmoji: {
     fontSize: 16,

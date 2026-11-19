@@ -8,6 +8,8 @@ import {
   Share,
   ScrollView,
   SafeAreaView,
+  Linking,
+  Alert,
 } from 'react-native';
 import Gallery from 'react-native-image-gallery';
 import {ImageDTO} from './UseGallery';
@@ -19,6 +21,7 @@ interface FullImageModalProps {
   initialIndex?: number;
   onClose: () => void;
   onDelete?: (index: number) => void;
+  onHide?: (image: ImageDTO) => void;
   onNavigateToTool?: (
     tool: 'Magic' | 'BgRemover' | 'Generative AI',
     imageUri: string,
@@ -43,12 +46,22 @@ const formatDate = (timestamp?: number): string => {
   return date.toLocaleString();
 };
 
+const formatDuration = (seconds?: number): string => {
+  if (!seconds || seconds <= 0) {
+    return '';
+  }
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
+
 const FullImageModal: React.FC<FullImageModalProps> = ({
   visible,
   images,
   initialIndex = 0,
   onClose,
   onDelete,
+  onHide,
   onNavigateToTool,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -57,6 +70,12 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
   const [rotation, setRotation] = useState(0);
 
   const currentImage = images[currentIndex];
+  const isVideo = Boolean(
+    (currentImage?.playableDuration && currentImage.playableDuration > 0) ||
+      currentImage?.type === 'video' ||
+      currentImage?.source?.uri?.endsWith('.mp4') ||
+      currentImage?.source?.uri?.endsWith('.mov'),
+  );
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -91,9 +110,11 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
     }
     try {
       await Share.share({
-        title: currentImage.filename || 'Photo',
+        title: currentImage.filename || (isVideo ? 'Video' : 'Photo'),
         url: currentImage.source.uri,
-        message: `Sharing photo: ${currentImage.source.uri}`,
+        message: `Sharing ${isVideo ? 'video' : 'photo'}: ${
+          currentImage.source.uri
+        }`,
       });
     } catch (error) {
       console.warn('Share error:', error);
@@ -102,6 +123,35 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
 
   const handleRotate = () => {
     setRotation(prev => (prev + 90) % 360);
+  };
+
+  const handlePlayVideo = async () => {
+    if (!currentImage?.source?.uri) {
+      return;
+    }
+    try {
+      const supported = await Linking.canOpenURL(currentImage.source.uri);
+      if (supported) {
+        await Linking.openURL(currentImage.source.uri);
+      } else {
+        Alert.alert(
+          'Video Playback',
+          `Cannot open video directly from ${currentImage.source.uri}. Native player required.`,
+        );
+      }
+    } catch (error) {
+      console.warn('Video open error:', error);
+      Alert.alert('Video Playback', 'Opening video with system player...');
+    }
+  };
+
+  const handleHideToVault = () => {
+    if (!currentImage) {
+      return;
+    }
+    if (onHide) {
+      onHide(currentImage);
+    }
   };
 
   const handleToolPress = (tool: 'Magic' | 'BgRemover' | 'Generative AI') => {
@@ -132,15 +182,27 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
           </Text>
 
           <View style={styles.headerActions}>
+            {onHide ? (
+              <TouchableOpacity
+                onPress={handleHideToVault}
+                style={styles.iconButton}>
+                <Text style={styles.actionEmoji}>🔒</Text>
+              </TouchableOpacity>
+            ) : null}
+
             <TouchableOpacity
               onPress={handleToggleFavorite}
               style={styles.iconButton}>
               <Text style={styles.actionEmoji}>{isFav ? '❤️' : '🤍'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleRotate} style={styles.iconButton}>
-              <Text style={styles.actionEmoji}>🔄</Text>
-            </TouchableOpacity>
+            {!isVideo ? (
+              <TouchableOpacity
+                onPress={handleRotate}
+                style={styles.iconButton}>
+                <Text style={styles.actionEmoji}>🔄</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity onPress={handleShare} style={styles.iconButton}>
               <Text style={styles.actionEmoji}>📤</Text>
@@ -177,34 +239,54 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
               setRotation(0);
             }}
           />
+
+          {/* Floating Video Play Button Overlay */}
+          {isVideo ? (
+            <TouchableOpacity
+              style={styles.videoPlayOverlay}
+              activeOpacity={0.8}
+              onPress={handlePlayVideo}>
+              <View style={styles.videoPlayBtn}>
+                <Text style={styles.videoPlayTriangle}>▶</Text>
+              </View>
+              <Text style={styles.videoPlayLabel}>
+                Play Video{' '}
+                {currentImage?.playableDuration
+                  ? `(${formatDuration(currentImage.playableDuration)})`
+                  : ''}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
-        {/* Bottom Quick Tools Toolbar */}
-        <View style={styles.bottomToolbar}>
-          <Text style={styles.toolsTitle}>Quick Enhance Tools:</Text>
-          <View style={styles.toolButtonsRow}>
-            <TouchableOpacity
-              style={styles.toolBtn}
-              onPress={() => handleToolPress('Magic')}>
-              <Text style={styles.toolIcon}>🪄</Text>
-              <Text style={styles.toolLabel}>Denoise</Text>
-            </TouchableOpacity>
+        {/* Bottom Quick Tools Toolbar (only for photos) */}
+        {!isVideo && onNavigateToTool ? (
+          <View style={styles.bottomToolbar}>
+            <Text style={styles.toolsTitle}>Quick Enhance Tools:</Text>
+            <View style={styles.toolButtonsRow}>
+              <TouchableOpacity
+                style={styles.toolBtn}
+                onPress={() => handleToolPress('Magic')}>
+                <Text style={styles.toolIcon}>🪄</Text>
+                <Text style={styles.toolLabel}>Denoise</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.toolBtn}
-              onPress={() => handleToolPress('BgRemover')}>
-              <Text style={styles.toolIcon}>✂️</Text>
-              <Text style={styles.toolLabel}>Remove BG</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.toolBtn}
+                onPress={() => handleToolPress('BgRemover')}>
+                <Text style={styles.toolIcon}>✂️</Text>
+                <Text style={styles.toolLabel}>Remove BG</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.toolBtn}
-              onPress={() => handleToolPress('Generative AI')}>
-              <Text style={styles.toolIcon}>✨</Text>
-              <Text style={styles.toolLabel}>AI Stylize</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.toolBtn}
+                onPress={() => handleToolPress('Generative AI')}>
+                <Text style={styles.toolIcon}>✨</Text>
+                <Text style={styles.toolLabel}>AI Stylize</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : null}
 
         {/* Info Details Sheet Modal */}
         <Modal
@@ -215,7 +297,9 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
           <View style={styles.infoModalOverlay}>
             <View style={styles.infoCard}>
               <View style={styles.infoCardHeader}>
-                <Text style={styles.infoCardTitle}>Photo Details</Text>
+                <Text style={styles.infoCardTitle}>
+                  {isVideo ? 'Video Details' : 'Photo Details'}
+                </Text>
                 <TouchableOpacity onPress={() => setShowInfo(false)}>
                   <Text style={styles.infoCardClose}>✕</Text>
                 </TouchableOpacity>
@@ -225,7 +309,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
                 <View style={styles.infoRow}>
                   <Text style={styles.infoField}>Filename:</Text>
                   <Text style={styles.infoVal}>
-                    {currentImage?.filename || 'Unnamed image'}
+                    {currentImage?.filename || 'Unnamed media'}
                   </Text>
                 </View>
 
@@ -256,7 +340,8 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
                   <View style={styles.infoRow}>
                     <Text style={styles.infoField}>Duration:</Text>
                     <Text style={styles.infoVal}>
-                      {Math.round(currentImage.playableDuration)} seconds
+                      {formatDuration(currentImage.playableDuration)} (
+                      {Math.round(currentImage.playableDuration)}s)
                     </Text>
                   </View>
                 ) : null}
@@ -264,7 +349,7 @@ const FullImageModal: React.FC<FullImageModalProps> = ({
                 <View style={styles.infoRow}>
                   <Text style={styles.infoField}>Type:</Text>
                   <Text style={styles.infoVal}>
-                    {currentImage?.type || 'Image'}
+                    {isVideo ? 'Video (Media)' : currentImage?.type || 'Image'}
                   </Text>
                 </View>
 
@@ -315,7 +400,7 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 8,
-    marginHorizontal: 3,
+    marginHorizontal: 2,
   },
   actionEmoji: {
     fontSize: 18,
@@ -323,10 +408,44 @@ const styles = StyleSheet.create({
   galleryContainer: {
     flex: 1,
     backgroundColor: '#000000',
+    position: 'relative',
   },
   gallery: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  videoPlayOverlay: {
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+    gap: 10,
+  },
+  videoPlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#38bdf8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoPlayTriangle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 2,
+  },
+  videoPlayLabel: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   bottomToolbar: {
     backgroundColor: 'rgba(20, 20, 20, 0.95)',
