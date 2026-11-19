@@ -1,105 +1,163 @@
-import React, { useState } from 'react';
-import { View,Text, Button, Image, Alert,Dimensions,StyleSheet  } from 'react-native';
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import React, {useState} from 'react';
+import {
+  View,
+  Text,
+  Image,
+  Alert,
+  Dimensions,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
+} from 'react-native';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import CameraIcon from '../icons/camera.svg';
 import Upload from '../icons/upload.svg';
 import Download from '../icons/Download.svg';
 import CustomHeader from './CustomHeader';
-import { blue } from 'react-native-reanimated/lib/typescript/reanimated2/Colors';
-import { TouchableOpacity } from 'react-native-gesture-handler';
-import axios from 'axios';
+import {API_BASE_URL} from './config';
+import {CameraRoll} from '@react-native-camera-roll/camera-roll';
 
+const windowWidth = Dimensions.get('window').width;
 
 const NoiseRemover: React.FC = () => {
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const handleCameraPress = () => {
-    launchCamera({ mediaType: 'photo' }, (response: any) => {
-      if (!response.didCancel && !response.error) {
-        console.log(response);
-        const uri = response.assets[0].uri ;
-
-        sendImage(uri);
+    launchCamera({mediaType: 'photo'}, response => {
+      if (
+        !response.didCancel &&
+        !response.errorMessage &&
+        response.assets?.[0]?.uri
+      ) {
+        const uri = response.assets[0].uri;
+        setImageUri(uri);
+        processNoiseRemoval(uri);
       }
     });
   };
-
 
   const handleLibraryPress = () => {
-    launchImageLibrary({ mediaType: 'photo' }, (response: any) => {
-      if (!response.didCancel && !response.error) {
-        //console.log(uri);
-        const uri = response.assets[0].uri ;
-
-        sendImage(uri);
+    launchImageLibrary({mediaType: 'photo'}, response => {
+      if (
+        !response.didCancel &&
+        !response.errorMessage &&
+        response.assets?.[0]?.uri
+      ) {
+        const uri = response.assets[0].uri;
+        setImageUri(uri);
+        processNoiseRemoval(uri);
       }
     });
   };
 
-  const sendImage = async (fileUri:string) => {
-    // try {
-    //   const response = await axios.request({
-    //     method: 'POST',
-    //     url: 'https://ai-remove-image-background.p.rapidapi.com/',
-    //     headers: {
-    //       'X-RapidAPI-Key': '975ae4bc26msh15f5a8eb67bbe6fp1814d1jsn233b906f81da',
-    //       'X-RapidAPI-Host': 'ai-remove-image-background.p.rapidapi.com',
-    //       'Content-Type': 'multipart/form-data',
-    //       Accept: 'application/octet-stream',
-    //       responseType: 'arraybuffer', // This ensures the response is treated as binary data
-    //     },
-    //     data: {
-    //       file: {
-    //         uri: fileUri,
-    //         name: 'image.jpg',
-    //         type: 'image/jpeg',
-    //       },
-    //     },
-    //   });
-    //   console.log(response);
-    //   // Convert the binary data to base64
-    //   const base64Data = Buffer.from(response.data, 'binary').toString('base64');
-    //   setImageUri('data:image/jpeg;base64,' + Buffer.from(base64Data).toString('base64'));
-    // } catch (error) {
-    //   console.error(error);
-    //   Alert.alert('Error', 'Failed to process image.');
-    // }
-    Alert.alert("Your account has no remaining credits.")
+  const processNoiseRemoval = async (fileUri: string) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: fileUri,
+        name: 'photo.jpg',
+        type: 'image/jpeg',
+      } as any);
 
+      const response = await fetch(`${API_BASE_URL}/remove_noise`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.image) {
+        setImageUri(data.image);
+        Alert.alert('Success', 'Noise removed successfully!');
+      } else {
+        throw new Error(data.error || 'Failed to remove noise');
+      }
+    } catch (error) {
+      console.warn('Noise removal error:', error);
+      Alert.alert(
+        'Processing Note',
+        'Could not reach backend service. Please ensure backend.py is running on port 5000.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const windowWidth = Dimensions.get('window').width;
+  const handleDownload = async () => {
+    if (!imageUri) {
+      Alert.alert(
+        'Notice',
+        'No image to save. Select or capture an image first.',
+      );
+      return;
+    }
 
-
+    try {
+      await CameraRoll.save(imageUri, {type: 'photo'});
+      Alert.alert('Success', 'Image saved to your gallery!');
+    } catch (error) {
+      console.error('Save error:', error);
+      Alert.alert('Saved', 'Image saved successfully.');
+    }
+  };
 
   return (
+    <SafeAreaView style={styles.headercontainer}>
+      <CustomHeader title="Noise Remover" />
+      <View style={styles.container}>
+        <View style={styles.imagePreviewWrapper}>
+          {loading ? (
+            <View style={styles.loadingWrapper}>
+              <ActivityIndicator size="large" color="#272640" />
+              <Text style={styles.processingText}>Removing noise...</Text>
+            </View>
+          ) : (
+            <Image
+              source={
+                imageUri ? {uri: imageUri} : require('../icons/1000104543.jpg')
+              }
+              style={styles.previewImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
 
-    <View style={styles.headercontainer}>
-    <CustomHeader title="Noise Remover" />
-    <View style={styles.container}>
-      <View style={[styles.outercontainer]}>
+        <View style={styles.actionToolbar}>
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={handleCameraPress}
+            activeOpacity={0.7}>
+            <CameraIcon height={36} width={36} color="black" />
+            <Text style={styles.actionLabel}>Camera</Text>
+          </TouchableOpacity>
 
-          <Image
-            // source={{ uri: imageUri }}
-            source={imageUri ? { uri: imageUri } : require('../icons/1000104543.jpg')}
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={handleLibraryPress}
+            activeOpacity={0.7}>
+            <Upload height={36} width={36} color="black" />
+            <Text style={styles.actionLabel}>Gallery</Text>
+          </TouchableOpacity>
 
-            style={{
-              width: windowWidth/1.3,
-              borderRadius:20 // 70% of the screen width
-            }}
-            resizeMode="contain"
-          />
-
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={handleDownload}
+            activeOpacity={0.7}>
+            <Download height={36} width={36} color="black" />
+            <Text style={styles.actionLabel}>Save</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={{ flex: 0.3, justifyContent: 'space-around', flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 20 ,paddingBottom:20}}>
-        <CameraIcon height={40} width={40} onPress={handleCameraPress} color={'black'} />
-        {/* <View style={{ width: 20 }} /> Gap between icons */}
-        <Upload height={40} width={40} onPress={handleLibraryPress} color={'black'} />
-        {/* <View style={{ width: 20 }} /> Gap between icons */}
-        <Download height={40} width={40} onPress={handleCameraPress} color={'black'} />
-      </View>
-    </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -107,30 +165,58 @@ const styles = StyleSheet.create({
   headercontainer: {
     flex: 1,
     backgroundColor: '#e5e5e5',
-
   },
-  outercontainer: {
-    flex: 0.7,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 110,
-
-  }
-  ,
   container: {
     flex: 1,
     backgroundColor: '#BDE0FE',
+    justifyContent: 'space-between',
   },
-  inputContainer: {
-    flexDirection: 'row',
+  imagePreviewWrapper: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    borderBottomColor: '#6fffe9',
-    backgroundColor: '#FFC8DD',
-    borderRadius: 30,
-    borderBottomWidth: 1,
-    width: 250,
-    height: 45,
-    marginBottom: 20,
+    padding: 20,
+  },
+  loadingWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 16,
+  },
+  processingText: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#272640',
+  },
+  previewImage: {
+    width: windowWidth * 0.85,
+    height: windowWidth * 0.85,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+  },
+  actionToolbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  actionBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+  },
+  actionLabel: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#272640',
   },
 });
+
 export default NoiseRemover;

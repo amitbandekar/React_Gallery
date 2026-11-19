@@ -1,5 +1,5 @@
-import { NavigationProp, useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import {NavigationProp, useNavigation} from '@react-navigation/native';
+import React, {useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,135 +8,151 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  Button,
-  Modal,
+  ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import EncryptedStorage from 'react-native-encrypted-storage';
 import CustomHeader from './CustomHeader';
+import {API_BASE_URL, REMOTE_API_URL} from './config';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
-  const navigation = useNavigation<NavigationProp<Record<string, object>>>();
-  const showAlert = (viewId: string) => Alert.alert('Alert', 'Button pressed ' + viewId);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [loginSuccess, setLoginSuccess] = useState(false);
-  const [loginMessage, setLoginMessage] = useState('');
-
-  useEffect(() => {
-    if (modalVisible) {
-      const timer = setTimeout(() => {
-        setModalVisible(false);
-      }, 1500); // Hide modal after 3 seconds
-      return () => clearTimeout(timer);
-    }
-  }, [modalVisible]);
+  const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const navigation = useNavigation<NavigationProp<Record<string, any>>>();
 
   const handleLogin = async () => {
-    if (!email) {
-      Alert.alert('Please Enter email.');
-      return;
-    }else if (!password) {
-      Alert.alert('Please Enter password.');
+    if (!email.trim()) {
+      Alert.alert('Notice', 'Please enter your email or username.');
       return;
     }
-     else {
+    if (!password) {
+      Alert.alert('Notice', 'Please enter your password.');
+      return;
+    }
+
+    setLoading(true);
+
+    const tryLogin = async (baseUrl: string) => {
+      const response = await fetch(`${baseUrl}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          username: email.trim(),
+          password,
+        }),
+      });
+      return response.json();
+    };
+
+    try {
+      let data;
       try {
-        const response = await fetch('https://amitbandekar.pythonanywhere.com/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            username: email,
-            password: password,
-          }),
-        });
-
-        const data = await response.json();
-        
-        console.log(data)
-        console.log(data.success)
-        if (data.success) {
-          // Display alert for successful login
-          Alert.alert("Login Successful", String(data.message));
-          await EncryptedStorage.setItem(
-            "user_session",
-            JSON.stringify({
-                Id : String(data.Id),
-                Name : String(data.Name),
-                Email : String(data.Email),
-            })
-        );
-        const session = await EncryptedStorage.getItem("user_session");
-        navigation.navigate({ name: 'Profile', params: {} });
-
-        console.log(session);
-        } else {
-          // Display alert for failed login
-          Alert.alert("Login Failed", String(data.message));
-        }
-      } catch (error) {
-        console.log('Login error:', error);
-        Alert.alert('Error', 'Login failed. Please try again.');
+        data = await tryLogin(API_BASE_URL);
+      } catch (e) {
+        // Fallback to remote backend
+        data = await tryLogin(REMOTE_API_URL);
       }
-    }
 
+      if (data && data.success) {
+        Alert.alert('Success', data.message || 'Login Successful');
+        await EncryptedStorage.setItem(
+          'user_session',
+          JSON.stringify({
+            Id: String(data.Id || ''),
+            Name: String(data.Name || email),
+            Email: String(data.Email || email),
+          }),
+        );
+        navigation.navigate('HomeScreen', {screen: 'Profile'});
+      } else {
+        Alert.alert('Login Failed', data?.message || 'Invalid credentials');
+      }
+    } catch (error) {
+      console.warn('Login error:', error);
+      Alert.alert(
+        'Error',
+        'Could not connect to authentication server. Please check your network or ensure backend is running.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-
-
-    <View style={styles.headercontainer}>
+    <SafeAreaView style={styles.headercontainer}>
       <CustomHeader title="Sign In" />
       <View style={styles.container}>
         <View style={styles.inputContainer}>
           <Image
             style={styles.inputIcon}
-            source={{ uri: 'https://img.icons8.com/ios-filled/512/circled-envelope.png' }}
+            source={{
+              uri: 'https://img.icons8.com/ios-filled/512/circled-envelope.png',
+            }}
           />
           <TextInput
             style={styles.inputs}
-            placeholder="Email"
+            placeholder="Email or Username"
             keyboardType="email-address"
-            placeholderTextColor="black"
+            autoCapitalize="none"
+            placeholderTextColor="#666"
             underlineColorAndroid="transparent"
-            onChangeText={(text) => setEmail(text)}
+            value={email}
+            onChangeText={setEmail}
           />
         </View>
 
         <View style={styles.inputContainer}>
           <Image
             style={styles.inputIcon}
-            source={{ uri: 'https://img.icons8.com/ios-glyphs/512/key.png' }}
+            source={{uri: 'https://img.icons8.com/ios-glyphs/512/key.png'}}
           />
           <TextInput
             style={styles.inputs}
             placeholder="Password"
-            placeholderTextColor="black"
-            secureTextEntry={true}
+            placeholderTextColor="#666"
+            secureTextEntry={!passwordVisible}
             underlineColorAndroid="transparent"
-            onChangeText={(text) => setPassword(text)}
+            value={password}
+            onChangeText={setPassword}
           />
+          <TouchableOpacity
+            style={styles.eyeIcon}
+            onPress={() => setPasswordVisible(!passwordVisible)}>
+            <Text style={styles.eyeText}>{passwordVisible ? '👁' : '🙈'}</Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
           style={[styles.buttonContainer, styles.loginButton]}
-          onPress={handleLogin}>
-          <Text style={styles.loginText}>Login</Text>
+          onPress={handleLogin}
+          disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.loginText}>Login</Text>
+          )}
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={styles.buttonContainer}
-          onPress={() => navigation.navigate({ name: 'Signup', params: {} })}
-          >
-          <Text>Sign up</Text>
+          style={[styles.buttonContainer, styles.secondaryButton]}
+          onPress={() => navigation.navigate('Signup')}>
+          <Text style={styles.secondaryText}>
+            Don't have an account? Sign up
+          </Text>
         </TouchableOpacity>
-        
 
+        <TouchableOpacity
+          style={styles.homeLink}
+          onPress={() => navigation.navigate('HomeScreen')}>
+          <Text style={styles.homeLinkText}>← Back to Gallery</Text>
+        </TouchableOpacity>
       </View>
-    </View>
-
-
+    </SafeAreaView>
   );
 };
 
@@ -144,48 +160,46 @@ const styles = StyleSheet.create({
   headercontainer: {
     flex: 1,
     backgroundColor: '#e5e5e5',
-
   },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#BDE0FE',
+    padding: 20,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomColor: '#6fffe9',
     backgroundColor: '#FFC8DD',
     borderRadius: 30,
-    borderBottomWidth: 1,
-    width: 250,
-    height: 45,
-    marginBottom: 20,
+    width: 280,
+    height: 48,
+    marginBottom: 18,
+    paddingHorizontal: 12,
   },
   inputs: {
-    height: 45,
-    marginLeft: 16,
-    borderBottomColor: '#FFFFFF',
+    height: 48,
+    marginLeft: 10,
     flex: 1,
+    color: '#000',
   },
   inputIcon: {
-    width: 30,
-    height: 30,
-    marginLeft: 15,
-    justifyContent: 'center',
+    width: 24,
+    height: 24,
   },
   eyeIcon: {
-    position: 'absolute',
-    right: 10,
+    padding: 6,
+  },
+  eyeText: {
+    fontSize: 18,
   },
   buttonContainer: {
-    height: 45,
-    flexDirection: 'row',
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    width: 250,
+    marginBottom: 14,
+    width: 280,
     borderRadius: 30,
   },
   loginButton: {
@@ -193,8 +207,25 @@ const styles = StyleSheet.create({
   },
   loginText: {
     color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  secondaryButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  },
+  secondaryText: {
+    color: '#272640',
+    fontWeight: '600',
+  },
+  homeLink: {
+    marginTop: 10,
+    padding: 10,
+  },
+  homeLinkText: {
+    color: '#272640',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
-
 
 export default Login;

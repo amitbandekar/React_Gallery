@@ -1,171 +1,245 @@
-import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, Dimensions, FlatList, TouchableOpacity, ActivityIndicator, SafeAreaView, Modal } from 'react-native';
-import { PermissionsAndroid, Platform } from 'react-native';
-import { Header } from '@rneui/themed';
-import { useGallery, ImageDTO } from './UseGallery';
+import React, {useState, useEffect, useCallback} from 'react';
+import {
+  View,
+  Image,
+  StyleSheet,
+  Dimensions,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
+  Text,
+  Alert,
+  PermissionsAndroid,
+  Platform,
+} from 'react-native';
+import {useGallery} from './UseGallery';
 import CustomHeader from './CustomHeader';
-import DelIcon from '../icons/deleteicon.svg';
 import FullImageModal from './FullImageModal';
-import Gallery from 'react-native-image-gallery';
-import { CameraRoll } from '@react-native-camera-roll/camera-roll';
-// import openImageModal from './Components/FullImageModal';
-
-
-
+import {CameraRoll} from '@react-native-camera-roll/camera-roll';
 
 async function hasAndroidPermission() {
-  const getCheckPermissionPromise = () => {
-    if (Platform.Version >= '33') {
-      return Promise.all([
-        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES),
-        PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO),
-      ]).then(
-        ([hasReadMediaImagesPermission, hasReadMediaVideoPermission]) =>
-          hasReadMediaImagesPermission && hasReadMediaVideoPermission,
-      );
-    } else {
-      return PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
-    }
-  };
-
-  const hasPermission = await getCheckPermissionPromise();
-  if (hasPermission) {
+  if (Platform.OS !== 'android') {
     return true;
   }
-  const getRequestPermissionPromise = () => {
-    if (Platform.Version >= '33') {
-      return PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
-      ]).then(
-        (statuses) =>
-          statuses[PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES] === PermissionsAndroid.RESULTS.GRANTED &&
-          statuses[PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO] === PermissionsAndroid.RESULTS.GRANTED,
-      );
-    } else {
-      return PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE).then(
-        (status) => status === PermissionsAndroid.RESULTS.GRANTED,
-      );
-    }
-  };
 
-  return await getRequestPermissionPromise();
+  const version =
+    typeof Platform.Version === 'string'
+      ? parseInt(Platform.Version, 10)
+      : Platform.Version;
+
+  if (version >= 33) {
+    const hasImages = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+    );
+    const hasVideo = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+    );
+    if (hasImages && hasVideo) {
+      return true;
+    }
+    const statuses = await PermissionsAndroid.requestMultiple([
+      PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+      PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+    ]);
+    return (
+      statuses[PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES] ===
+        PermissionsAndroid.RESULTS.GRANTED &&
+      statuses[PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO] ===
+        PermissionsAndroid.RESULTS.GRANTED
+    );
+  } else {
+    const hasPermission = await PermissionsAndroid.check(
+      PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+    );
+    if (hasPermission) {
+      return true;
+    }
+    const status = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+    );
+    return status === PermissionsAndroid.RESULTS.GRANTED;
+  }
 }
 
+const windowWidth = Dimensions.get('window').width;
+const itemSize = (windowWidth - 12) / 2;
+
 const GalleryImageLoader: React.FC = () => {
-  // const [photos, setPhotos] = useState<Photo[]>([]);
-  const { photos, loadNextPagePictures, isLoading, isLoadingNextPage, isReloading, hasNextPage } = useGallery({
-    pageSize: 20, // Adjust the page size as needed
+  const {
+    photos,
+    loadNextPagePictures,
+    getUnloadedPictures,
+    isLoading,
+    isLoadingNextPage,
+  } = useGallery({
+    pageSize: 20,
   });
 
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+
+  const initGallery = useCallback(async () => {
+    const permitted = await hasAndroidPermission();
+    if (permitted) {
+      loadNextPagePictures();
+    }
+  }, [loadNextPagePictures]);
 
   useEffect(() => {
-    const loadImages = async () => {
-      if (!(await hasAndroidPermission())) {
-        return;
-      }
+    initGallery();
+  }, [initGallery]);
 
-      // loadNextPagePictures(); // Call the function to load the initial set of images
-    };
-
-    loadImages();
-  }, []);
-
-
-  interface RemoteImage {
-    source: { uri: string };
-  }
-  
-  let remoteImages: RemoteImage[] = [];
-  const [modalVisible, setModalVisible] = useState(false);
-  let [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const openImageModal = (index: number) => {
-       //setSelectedIndex();
-       if (photos && photos.length > 0) {
-
-        console.log(remoteImages);
-        setSelectedImageIndex(index);
-        setModalVisible(true);
-
-       }
-  };
-  
-  const closeImageModal = () => {
-    setSelectedImageIndex(0);
-    setModalVisible(false);
-
-  };
-  const deleteimage = (id:number) => {
-    if (photos && photos.length > 0) {
-    var uri = photos[id].source.uri
-    CameraRoll.deletePhotos([uri]);
+    if (photos && photos.length > index) {
+      setSelectedImageIndex(index);
+      setModalVisible(true);
     }
   };
 
+  const closeImageModal = () => {
+    setModalVisible(false);
+  };
+
+  const deleteImage = (index: number) => {
+    if (!photos || photos.length === 0 || !photos[index]) {
+      return;
+    }
+    Alert.alert('Delete Photo', 'Are you sure you want to delete this photo?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const uri = photos[index].source.uri;
+            await CameraRoll.deletePhotos([uri]);
+            setModalVisible(false);
+            getUnloadedPictures();
+          } catch (error) {
+            console.error('Failed to delete photo:', error);
+            Alert.alert('Error', 'Failed to delete photo.');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
-<SafeAreaView style={styles.headercontainer}>
-    <CustomHeader title="Photos" />
-<View style={{ backgroundColor: "#BDE0FE" }}>
-      <View style={{ width: '100%', alignItems: 'center' }}>
-
-        <FlatList
-          data={photos}
-          numColumns={2}
-          onEndReached={loadNextPagePictures}
-          onEndReachedThreshold={0.1}
-          renderItem={({ item, index }) => {
-            return (
-              <TouchableOpacity onPress={() => openImageModal(index)}>
+    <SafeAreaView style={styles.headercontainer}>
+      <CustomHeader title="Photos" />
+      <View style={styles.body}>
+        {isLoading && photos.length === 0 ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color="#272640" />
+            <Text style={styles.loadingText}>Loading photos...</Text>
+          </View>
+        ) : photos.length === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>No photos found in gallery.</Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={loadNextPagePictures}>
+              <Text style={styles.retryText}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            data={photos}
+            numColumns={2}
+            keyExtractor={(item, index) => item.source.uri || String(index)}
+            onEndReached={loadNextPagePictures}
+            onEndReachedThreshold={0.5}
+            contentContainerStyle={styles.listContent}
+            renderItem={({item, index}) => (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => openImageModal(index)}>
                 <View style={styles.dvimg}>
-                <Image style={styles.img}
-                  key={index}
-                  source={{ uri: item.source.uri }}
-                />
-              </View>
+                  <Image
+                    style={styles.img}
+                    source={{uri: item.source.uri}}
+                    resizeMode="cover"
+                  />
+                </View>
               </TouchableOpacity>
-            )
-          }} />
-        <Modal visible={modalVisible} onRequestClose={closeImageModal}>
-            <Gallery
-              style={{ flex: 1, backgroundColor: 'black' }}
-              images={photos}
-              initialPage={selectedImageIndex}
-            />
-            <DelIcon height={40} width={40} onPress={() => deleteimage(selectedImageIndex)} color={'black'} />
+            )}
+            ListFooterComponent={
+              isLoadingNextPage ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator size="small" color="#272640" />
+                </View>
+              ) : null
+            }
+          />
+        )}
 
-      </Modal>
+        <FullImageModal
+          visible={modalVisible}
+          images={photos}
+          initialIndex={selectedImageIndex}
+          onClose={closeImageModal}
+          onDelete={deleteImage}
+        />
       </View>
-    </View>
     </SafeAreaView>
   );
 };
-
 
 const styles = StyleSheet.create({
   headercontainer: {
     flex: 1,
     backgroundColor: '#e5e5e5',
-
+  },
+  body: {
+    flex: 1,
+    backgroundColor: '#BDE0FE',
+  },
+  listContent: {
+    padding: 3,
   },
   dvimg: {
-    width: Dimensions.get('window').width / 2 - 5,
-    height: 200,
-    borderRadius: 2,
-    margin: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    aspectRatio: 0.9
+    width: itemSize,
+    height: itemSize,
+    margin: 3,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#a2d2ff',
   },
   img: {
-    height: '99%',
-    width: '99%'
+    width: '100%',
+    height: '100%',
   },
-   scrollView: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#272640',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#272640',
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: '#00b5ec',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  footerLoader: {
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
 });
 
 export default GalleryImageLoader;

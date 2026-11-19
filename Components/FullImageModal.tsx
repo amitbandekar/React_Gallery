@@ -1,34 +1,104 @@
-import React, { useState } from 'react';
-import { View, Image, StyleSheet, Dimensions, TouchableOpacity, Text,Button } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler'; // Import ScrollView from gesture-handler
-import {ImageDTO  } from './UseGallery';
+import React from 'react';
+import {StyleSheet, View, Text, TouchableOpacity, Modal} from 'react-native';
 import Gallery from 'react-native-image-gallery';
+import {ImageDTO} from './UseGallery';
 
-interface RemoteImage {
-  source: { uri: string };
+interface FullImageModalProps {
+  visible: boolean;
+  images: ImageDTO[];
+  initialIndex?: number;
+  onClose: () => void;
+  onDelete?: (index: number) => void;
 }
-interface ImageViewerProps {
-  images: RemoteImage[];
-  selectedIndex: number | 0;
-}
-const imagess = [
-  
-  { source: { url: 'https://encrypted-tbn0.gstatic.com/licensed-image?q=tbn:ANd9GcQMjYrFKl1JFRSYQRRxSJUEn4oQy-Xc2f6isP63tmq9sJXHCyjp18p-0sxXO-et4TbAaSOEFUxWkUry6Js' } },
-  { source: { uri: 'http://i.imgur.com/XP2BE7q.jpg' } },
-  { source: { uri: 'http://i.imgur.com/XP2BE7q.jpg' } },
-  { source: { url: 'https://encrypted-tbn0.gstatic.com/licensed-image?q=tbn:ANd9GcQMjYrFKl1JFRSYQRRxSJUEn4oQy-Xc2f6isP63tmq9sJXHCyjp18p-0sxXO-et4TbAaSOEFUxWkUry6Js' } },
-  { source: { uri: 'http://i.imgur.com/XP2BE7q.jpg' } }
-  
-]
-const imagdes = [{"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_141130.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_141126.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_141012.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_141000.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140957.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140938.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140936.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140913.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140911.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140742.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240501_140730.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-05-01-10-12-07-358_com.android.settings.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/IMG-20240501-WA0001.jpeg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-30-21-08-25-059_com.google.android.googlequicksearchbox.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-30-13-59-56-171_com.google.android.apps.nbu.paisa.user.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-29-22-34-45-339_com.instagram.android.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-29-22-34-41-795_com.instagram.android.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-28-20-23-50-179_com.example.practicalpractice.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-28-19-17-48-594_com.instagram.android.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/Pictures/WhatsApp/IMG-20240427-WA0014.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-27-16-02-40-893_com.instagram.android.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-26-22-54-48-203_com.supercell.clashroyale.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-26-22-54-41-661_com.supercell.clashroyale.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-26-22-54-38-350_com.supercell.clashroyale.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-26-22-15-22-471_com.whatsapp.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Screenshots/Screenshot_2024-04-26-12-08-51-489_com.gallery.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240426_111714.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240426_111710.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240426_111706.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240426_111703.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240426_111659.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240426_111655.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240425_214056.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240425_214025.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240425_203508.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240425_130850.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/IMG-20240424-WA0025.jpeg"}}, {"source": {"uri": "file:///storage/emulated/0/Pictures/1_fKQUHeIbZpMiBW8XC3M70A.png"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240417_213213.jpg"}}, {"source": {"uri": "file:///storage/emulated/0/DCIM/Camera/IMG_20240417_175912.jpg"}}];
-const FullImageModal: React.FC<ImageViewerProps> = ({ images, selectedIndex}) => {
-  console.log("this is log which is returned by this ::::"+images);
+
+const FullImageModal: React.FC<FullImageModalProps> = ({
+  visible,
+  images,
+  initialIndex = 0,
+  onClose,
+  onDelete,
+}) => {
+  const [currentIndex, setCurrentIndex] = React.useState(initialIndex);
+
+  React.useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
+
   return (
-      <Gallery
-      style={{ flex: 1, backgroundColor: 'black' }}
-      images={images}
-      initialPage={0}
-    />
-    )
-}
+    <Modal
+      visible={visible}
+      transparent={false}
+      animationType="fade"
+      onRequestClose={onClose}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
+            <Text style={styles.btnText}>✕ Close</Text>
+          </TouchableOpacity>
+          <Text style={styles.counterText}>
+            {images.length > 0 ? `${currentIndex + 1} / ${images.length}` : ''}
+          </Text>
+          {onDelete ? (
+            <TouchableOpacity
+              onPress={() => onDelete(currentIndex)}
+              style={styles.headerBtn}>
+              <Text style={styles.deleteText}>Delete</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerBtn} />
+          )}
+        </View>
+
+        <Gallery
+          style={styles.gallery}
+          images={images}
+          initialPage={initialIndex}
+          onPageSelected={(index: number) => setCurrentIndex(index)}
+        />
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 45,
+    paddingBottom: 15,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    zIndex: 10,
+  },
+  headerBtn: {
+    padding: 8,
+    minWidth: 60,
+  },
+  btnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteText: {
+    color: '#ff4d4d',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  counterText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  gallery: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+});
+
 export default FullImageModal;

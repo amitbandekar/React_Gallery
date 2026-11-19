@@ -5,10 +5,10 @@ A React Native app for managing and enhancing your photos. Includes a built-in g
 ## Features
 
 - Browse and view photos from your device
-- Remove noise from images
+- Remove noise from images with smart denoising
 - Remove backgrounds with one tap
-- Generative AI image tools
-- User authentication (Sign in / Sign up)
+- Generative AI image tools with style presets (Vibrant, Cyberpunk, Vintage, Sketch)
+- User authentication (Sign in / Sign up) with encrypted session persistence
 
 ## Getting Started
 
@@ -18,16 +18,24 @@ Make sure you have [Node.js](https://nodejs.org/) (v18+), React Native CLI, and 
 
 ```bash
 npm install
-# or
-yarn install
+```
+
+### Start the Python backend
+
+The app uses a Python backend (`backend.py`) for authentication, noise removal, background removal, and AI enhancement.
+
+```bash
+# Install Python dependencies
+pip install flask flask-cors pillow bcrypt
+
+# Start backend server (runs on port 5000)
+python3 backend.py
 ```
 
 ### Start the Metro bundler
 
 ```bash
 npm start
-# or
-yarn start
 ```
 
 ### Run on Android
@@ -42,10 +50,17 @@ npm run android
 npm run ios
 ```
 
-### Run tests
+### Run tests and linting
 
 ```bash
+# Run React Native tests
 npm test
+
+# Run linter
+npm run lint
+
+# Run backend unit tests
+python3 test_backend.py
 ```
 
 ## Tech Stack
@@ -54,13 +69,9 @@ npm test
 - TypeScript
 - React Navigation (Stack + Bottom Tabs)
 - NativeWind (Tailwind for RN)
-- Axios
 - React Native Camera Roll
 - React Native Image Picker
-
-## Backend
-
-The app uses a Python backend (`backend.py`) for image processing features. Make sure the backend is running before using noise removal or background remover features.
+- Python Flask backend with Pillow, bcrypt, and rembg support
 
 ## Notes
 

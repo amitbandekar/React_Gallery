@@ -1,26 +1,35 @@
-import { CameraRoll, cameraRollEventEmitter } from '@react-native-camera-roll/camera-roll';
-
-import { useCallback, useEffect, useState } from 'react';
-
-import { AppState, EmitterSubscription, Platform } from 'react-native';
+import {CameraRoll} from '@react-native-camera-roll/camera-roll';
+import {useCallback, useEffect, useState} from 'react';
+import {AppState} from 'react-native';
 
 interface GalleryOptions {
-  pageSize: number;
+  pageSize?: number;
   mimeTypeFilter?: Array<string>;
 }
+
 export interface ImageDTO {
-  source: { uri: string };
-  // Add other properties as needed
+  source: {uri: string};
+  dimensions?: {width: number; height: number};
 }
-export const convertCameraRollPicturesToImageDtoType = (edges: any[]): ImageDTO[] => {
+
+export const convertCameraRollPicturesToImageDtoType = (
+  edges: any[],
+): ImageDTO[] => {
   return edges.map((edge: any) => ({
-    source: { uri: edge.node.image.uri },
+    source: {uri: edge.node.image.uri},
+    dimensions: edge.node.image.playableDuration
+      ? undefined
+      : {
+          width: edge.node.image.width,
+          height: edge.node.image.height,
+        },
   }));
 };
 
-interface GalleryLogic {
-  photos?: ImageDTO[];
+export interface GalleryLogic {
+  photos: ImageDTO[];
   loadNextPagePictures: () => void;
+  getUnloadedPictures: () => void;
   isLoading: boolean;
   isLoadingNextPage: boolean;
   isReloading: boolean;
@@ -39,26 +48,29 @@ const supportedMimeTypesByTheBackEnd = [
 export const useGallery = ({
   pageSize = 30,
   mimeTypeFilter = supportedMimeTypesByTheBackEnd,
-}: GalleryOptions): GalleryLogic => {
+}: GalleryOptions = {}): GalleryLogic => {
   const [isLoading, setIsLoading] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
   const [isLoadingNextPage, setIsLoadingNextPage] = useState(false);
   const [hasNextPage, setHasNextPage] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string>();
-  const [photos, setPhotos] = useState<ImageDTO[]>();
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [photos, setPhotos] = useState<ImageDTO[]>([]);
 
   const loadNextPagePictures = useCallback(async () => {
     try {
-      nextCursor ? setIsLoadingNextPage(true) : setIsLoading(true);
-      const { edges, page_info } = await CameraRoll.getPhotos({
+      if (nextCursor) {
+        setIsLoadingNextPage(true);
+      } else {
+        setIsLoading(true);
+      }
+      const {edges, page_info} = await CameraRoll.getPhotos({
         first: pageSize,
         after: nextCursor,
         assetType: 'Photos',
         mimeTypes: mimeTypeFilter,
-        ...({ include: ['fileSize', 'filename'] }),
       });
-      const photos = convertCameraRollPicturesToImageDtoType(edges);
-      setPhotos((prev) => [...(prev ?? []), ...photos]);
+      const newPhotos = convertCameraRollPicturesToImageDtoType(edges);
+      setPhotos(prev => (nextCursor ? [...prev, ...newPhotos] : newPhotos));
 
       setNextCursor(page_info.end_cursor);
       setHasNextPage(page_info.has_next_page);
@@ -73,12 +85,11 @@ export const useGallery = ({
   const getUnloadedPictures = useCallback(async () => {
     try {
       setIsReloading(true);
-      const { edges, page_info } = await CameraRoll.getPhotos({
-        first: !photos || photos.length < pageSize ? pageSize : photos.length,
+      const count = photos.length > 0 ? photos.length : pageSize;
+      const {edges, page_info} = await CameraRoll.getPhotos({
+        first: count,
         assetType: 'Photos',
         mimeTypes: mimeTypeFilter,
-        ...({ include: ['fileSize', 'filename'] }),
-        ...({ include: ['fileSize', 'filename'] }),
       });
       const newPhotos = convertCameraRollPicturesToImageDtoType(edges);
       setPhotos(newPhotos);
@@ -86,20 +97,14 @@ export const useGallery = ({
       setNextCursor(page_info.end_cursor);
       setHasNextPage(page_info.has_next_page);
     } catch (error) {
-      console.error('useGallery getNewPhotos error:', error);
+      console.error('useGallery getUnloadedPictures error:', error);
     } finally {
       setIsReloading(false);
     }
-  }, [mimeTypeFilter, pageSize, photos]);
+  }, [mimeTypeFilter, pageSize, photos.length]);
 
   useEffect(() => {
-    if (!photos) {
-      loadNextPagePictures();
-    }
-  }, [loadNextPagePictures, photos]);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         getUnloadedPictures();
       }
@@ -110,11 +115,10 @@ export const useGallery = ({
     };
   }, [getUnloadedPictures]);
 
- 
-
   return {
     photos,
     loadNextPagePictures,
+    getUnloadedPictures,
     isLoading,
     isLoadingNextPage,
     isReloading,

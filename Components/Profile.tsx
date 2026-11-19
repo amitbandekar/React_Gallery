@@ -1,32 +1,46 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  SafeAreaView,
+} from 'react-native';
 import CustomHeader from './CustomHeader';
 import EncryptedStorage from 'react-native-encrypted-storage';
-import { useNavigation ,NavigationProp, useIsFocused } from '@react-navigation/native'; // Import the necessary functions from React Navigation
+import {
+  useNavigation,
+  NavigationProp,
+  useIsFocused,
+} from '@react-navigation/native';
 import LogOutIcon from '../icons/Logout.svg';
 
+interface UserData {
+  Id?: string;
+  Name: string;
+  Email: string;
+}
 
-const ProfileDetail = () => {
+const ProfileDetail: React.FC = () => {
   const isFocused = useIsFocused();
-  const navigation = useNavigation<NavigationProp<Record<string, object>>>();
-
-  interface UserData {
-    Name: string;
-    Email: string;
-    // Define other properties as needed
-  }
+  const navigation = useNavigation<NavigationProp<Record<string, any>>>();
   const [userData, setUserData] = useState<UserData | null>(null);
 
   const fetchUserData = useCallback(async () => {
-    const session = await EncryptedStorage.getItem("user_session");
-    if (session !== null) {
-      const UserData = JSON.parse(session);
-      setUserData(UserData);
-    } else {
+    try {
+      const session = await EncryptedStorage.getItem('user_session');
+      if (session) {
+        const parsed: UserData = JSON.parse(session);
+        setUserData(parsed);
+      } else {
+        setUserData(null);
+      }
+    } catch (error) {
+      console.warn('Error reading session:', error);
       setUserData(null);
-      navigation.navigate({ name: 'SignIn', params: {} });
     }
-  }, [navigation]);
+  }, []);
 
   useEffect(() => {
     fetchUserData();
@@ -38,46 +52,95 @@ const ProfileDetail = () => {
     }
   }, [isFocused, fetchUserData]);
 
-  const Logout = async () => {
-    await EncryptedStorage.clear();
-    navigation.navigate({ name: 'SignIn', params: {} });
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await EncryptedStorage.clear();
+            setUserData(null);
+            navigation.navigate('SignIn');
+          } catch (error) {
+            console.error('Logout error:', error);
+          }
+        },
+      },
+    ]);
   };
 
+  const getInitials = (name?: string) => {
+    if (!name) {
+      return '?';
+    }
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
-  
   return (
-    
-    <View style={styles.headercontainer}>
-    <CustomHeader title="Profile" />
-    <View style={styles.container}>
-      <View></View>
-      <View style={styles.body}>
-        
-        <View style={styles.avatarContainer}>
-            <Text style={styles.avatar}>
-            {userData  ? userData.Name.split(' ').map(name => name[0].toUpperCase()).join('') : "RS"}
-            </Text>
-        </View>
-          <View style={styles.nameContainer}>
-            <Text style={styles.name}>
-              {userData ? userData.Name : "Rohit Sharma"}
-            </Text>
-          </View>
-        <View style={styles.infoContainer}>
-          <Text style={styles.infoLabel}>Email:</Text>
-          <Text style={styles.infoText}>
-              {userData ? userData.Email : "sharmarohit264@email.com"}
-            </Text>
-        </View>
-        <View style={[styles.infoContainer, { marginBottom: 20 }]}>
-          <Text style={styles.infoLabel}>Location:</Text>
-          <Text style={styles.infoText}>Mumbai</Text>
-        </View>
-        <LogOutIcon height={40} width={40} onPress={Logout} color={'black'}  />
-      </View>
-    </View>
-    </View>
+    <SafeAreaView style={styles.headercontainer}>
+      <CustomHeader title="Profile" />
+      <View style={styles.container}>
+        {userData ? (
+          <View style={styles.body}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatar}>{getInitials(userData.Name)}</Text>
+            </View>
 
+            <View style={styles.nameContainer}>
+              <Text style={styles.name}>{userData.Name}</Text>
+            </View>
+
+            <View style={styles.infoCard}>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Email:</Text>
+                <Text style={styles.infoText}>{userData.Email}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Status:</Text>
+                <Text style={styles.infoBadge}>Active</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+              activeOpacity={0.8}>
+              <LogOutIcon height={24} width={24} color="white" />
+              <Text style={styles.logoutButtonText}>Log Out</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.guestBody}>
+            <View style={styles.guestAvatar}>
+              <Text style={styles.guestAvatarText}>👤</Text>
+            </View>
+            <Text style={styles.guestTitle}>Welcome to Gallery App</Text>
+            <Text style={styles.guestSubtitle}>
+              Sign in to sync your preferences and access personalized features.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.signInBtn}
+              onPress={() => navigation.navigate('SignIn')}>
+              <Text style={styles.signInBtnText}>Sign In</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.signUpBtn}
+              onPress={() => navigation.navigate('Signup')}>
+              <Text style={styles.signUpBtnText}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -91,59 +154,140 @@ const styles = StyleSheet.create({
     backgroundColor: '#BDE0FE',
   },
   body: {
-    marginTop:120,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
   },
   avatarContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: '#669BBC',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
+    shadowOffset: {width: 0, height: 3},
     shadowRadius: 6,
     shadowOpacity: 0.16,
+    elevation: 4,
   },
   avatar: {
-    fontSize: 72,
+    fontSize: 48,
     fontWeight: '700',
-    color:'#ffbe0b'
+    color: '#ffbe0b',
   },
   nameContainer: {
-    marginTop: 24,
+    marginTop: 20,
+    marginBottom: 20,
     alignItems: 'center',
-    color:'black',
   },
   name: {
-    fontSize: 24,
-    fontWeight: '600',
-    color:'#fb8500',
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#003049',
   },
-  infoContainer: {
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    marginBottom: 28,
+  },
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginVertical: 8,
   },
   infoLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#003049',
-    marginRight: 8,
+    width: 70,
   },
   infoText: {
     fontSize: 16,
-    color:'#003049',
+    color: '#003049',
+    flex: 1,
   },
-  LogOutIcon: {
-    color:'black'
+  infoBadge: {
+    fontSize: 14,
+    color: '#2a9d8f',
+    fontWeight: '700',
   },
-  
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e63946',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 30,
+    gap: 8,
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  guestBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  guestAvatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  guestAvatarText: {
+    fontSize: 48,
+  },
+  guestTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#003049',
+    marginBottom: 8,
+  },
+  guestSubtitle: {
+    fontSize: 14,
+    color: '#457b9d',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  signInBtn: {
+    backgroundColor: '#00b5ec',
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    borderRadius: 30,
+    width: 220,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  signInBtnText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  signUpBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    borderRadius: 30,
+    width: 220,
+    alignItems: 'center',
+  },
+  signUpBtnText: {
+    color: '#272640',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 export default ProfileDetail;

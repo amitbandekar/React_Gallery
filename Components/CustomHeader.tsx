@@ -1,13 +1,21 @@
 import React from 'react';
-import { Header } from '@rneui/themed';
+import {Header} from '@rneui/themed';
 
-const CustomHeader: React.FC<{ title: string }> = ({ title }) => {
-    return (
+interface CustomHeaderProps {
+  title: string;
+}
+
+const CustomHeader: React.FC<CustomHeaderProps> = ({title}) => {
+  return (
     <Header
       backgroundColor="#CDB4DB"
       centerComponent={{
         text: title,
-        style: { color: "#272640" ,fontSize:15 }
+        style: {
+          color: '#272640',
+          fontSize: 18,
+          fontWeight: 'bold',
+        },
       }}
       placement="center"
     />
